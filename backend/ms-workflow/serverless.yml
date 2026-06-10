@@ -22,6 +22,9 @@ provider:
     EVENT_BUS: pedidos-bus
     STATE_MACHINE_ARN: arn:aws:states:us-east-1:${aws:accountId}:stateMachine:pedido-workflow-${sls:stage}
     JWT_SECRET: ${file(../shared-config.yml):jwtSecret}
+    RAPPI_API_KEY: ${file(../shared-config.yml):rappiApiKey}
+    # URL de la API-2 en GCP (vacía hasta desplegar GCP; la Lambda lo tolera)
+    GCP_STATUS_URL: ${file(../shared-config.yml):gcpStatusUrl, ''}
 
 functions:
   authorizer:
@@ -50,6 +53,24 @@ functions:
   # Invocada si un paso falla o expira (timeout 24h): publica order.failed
   fallar:
     handler: workflow.fallar
+
+  # Multi-nube EDA: si el pedido vino de Rappi, cada cambio de estado
+  # se notifica a la API-2 en GCP (filtro origin=RAPPI en la regla)
+  notifyRappi:
+    handler: workflow.notify_rappi
+    events:
+      - eventBridge:
+          eventBus: arn:aws:events:us-east-1:${aws:accountId}:event-bus/pedidos-bus
+          pattern:
+            source:
+              - ms.workflow
+            detail-type:
+              - order.step.changed
+              - order.completed
+              - order.failed
+            detail:
+              origin:
+                - RAPPI
 
   listarTareas:
     handler: tareas.listar

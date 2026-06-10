@@ -71,6 +71,41 @@ def asignar_tarea(event, context):
     return {"ok": True, "paso": paso}
 
 
+def notify_rappi(event, context):
+    """Consumidor EventBridge (solo origin=RAPPI): actualiza el estado en 'Rappi' (GCP API-2)."""
+    import urllib.request
+
+    url = os.environ.get("GCP_STATUS_URL", "")
+    if not url:
+        print("GCP_STATUS_URL no configurada; se omite notificación")
+        return {"ok": False, "skipped": True}
+
+    detail = event["detail"]
+    dt = event.get("detail-type")
+    if dt == "order.completed":
+        paso, status = "FIN", "DELIVERED"
+    elif dt == "order.failed":
+        paso, status = "ERROR", "FAILED"
+    else:
+        paso, status = detail["paso"], detail["status_pedido"]
+
+    body = json.dumps({
+        "order_id": detail["order_id"],
+        "tenant_id": detail["tenant_id"],
+        "paso": paso,
+        "status_pedido": status,
+    }).encode()
+
+    req = urllib.request.Request(
+        url, data=body, method="POST",
+        headers={"Content-Type": "application/json",
+                 "x-api-key": os.environ["RAPPI_API_KEY"]},
+    )
+    with urllib.request.urlopen(req, timeout=8) as r:
+        print(f"Rappi notificado: {detail['order_id']} → {status} (HTTP {r.status})")
+    return {"ok": True}
+
+
 def fallar(event, context):
     """Estado de error del workflow: publica order.failed (→ pedido FAILED)."""
     events.put_events(Entries=[{

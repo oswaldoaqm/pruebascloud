@@ -2,3 +2,5 @@
 # y cambia los valores. NUNCA subas shared-config.yml al repositorio.
 jwtSecret: CAMBIA-ESTE-SECRETO-LARGO-Y-ALEATORIO
 rappiApiKey: CAMBIA-ESTA-CLAVE-PARA-RAPPI
+# URL de la API-2 (Rappi Status) en GCP; se completa después de desplegarla
+gcpStatusUrl: ''
