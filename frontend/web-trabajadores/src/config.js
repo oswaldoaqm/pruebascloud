@@ -1,6 +1,6 @@
-export const API_USUARIOS = 'https://j9nm2lgxdj.execute-api.us-east-1.amazonaws.com'
-export const API_PEDIDOS = 'https://dui0hf2ec8.execute-api.us-east-1.amazonaws.com'
-export const API_WORKFLOW = 'https://9273jihyuf.execute-api.us-east-1.amazonaws.com'
+export const API_USUARIOS = 'https://urvrhgysm5.execute-api.us-east-1.amazonaws.com'
+export const API_PEDIDOS = 'https://os2ehl7kg2.execute-api.us-east-1.amazonaws.com'
+export const API_WORKFLOW = 'https://s1fn3k0udc.execute-api.us-east-1.amazonaws.com'
 
 export const TENANTS = [
   { id: 'pj-miraflores', nombre: 'Papa Johns - Miraflores' },

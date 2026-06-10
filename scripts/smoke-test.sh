@@ -4,9 +4,9 @@
 # Uso: bash scripts/smoke-test.sh
 set -u
 
-URL_USU=https://j9nm2lgxdj.execute-api.us-east-1.amazonaws.com
-URL_PED=https://dui0hf2ec8.execute-api.us-east-1.amazonaws.com
-URL_WF=https://9273jihyuf.execute-api.us-east-1.amazonaws.com
+URL_USU=https://urvrhgysm5.execute-api.us-east-1.amazonaws.com
+URL_PED=https://os2ehl7kg2.execute-api.us-east-1.amazonaws.com
+URL_WF=https://s1fn3k0udc.execute-api.us-east-1.amazonaws.com
 TENANT=pj-miraflores
 PASS=123456
 

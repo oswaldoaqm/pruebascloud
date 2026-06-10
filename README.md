@@ -82,10 +82,10 @@ Estructura del repositorio:
 
 | Servicio | URL |
 |---|---|
-| ms-usuarios | https://j9nm2lgxdj.execute-api.us-east-1.amazonaws.com |
-| ms-productos | https://8ci3wauu7c.execute-api.us-east-1.amazonaws.com |
-| ms-pedidos | https://dui0hf2ec8.execute-api.us-east-1.amazonaws.com |
-| ms-workflow | https://9273jihyuf.execute-api.us-east-1.amazonaws.com |
+| ms-usuarios | https://urvrhgysm5.execute-api.us-east-1.amazonaws.com |
+| ms-productos | https://sqzem7pezh.execute-api.us-east-1.amazonaws.com |
+| ms-pedidos | https://os2ehl7kg2.execute-api.us-east-1.amazonaws.com |
+| ms-workflow | https://s1fn3k0udc.execute-api.us-east-1.amazonaws.com |
 
 Usuarios demo (tenant `pj-miraflores`, password `123456`): `cocinero@pj.com`, `despachador@pj.com`, `repartidor@pj.com`.
 
