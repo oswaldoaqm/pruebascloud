@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.serverless/
+shared-config.yml
+__pycache__/
+*.pyc
+.env
+Plan_Arquitectura_Proyecto_Final.md
+2. Proyecto Final (Entrega Semana 15) V4.10.pdf

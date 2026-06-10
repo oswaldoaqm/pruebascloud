@@ -1,0 +1,109 @@
+org: oswaldoaqm
+service: ms-pedidos
+
+provider:
+  name: aws
+  runtime: python3.12
+  region: us-east-1
+  stage: dev
+  iam:
+    role: arn:aws:iam::${aws:accountId}:role/LabRole
+  httpApi:
+    cors: true
+    authorizers:
+      jwtAuth:
+        type: request
+        functionName: authorizer
+        enableSimpleResponses: true
+        identitySource: $request.header.Authorization
+  environment:
+    STAGE: ${sls:stage}
+    ORDERS_TABLE: t_pedidos-${sls:stage}
+    EVENT_BUS: pedidos-bus
+    JWT_SECRET: ${file(../shared-config.yml):jwtSecret}
+    # Clave que usará la API de GCP (Rappi) para crear pedidos
+    RAPPI_API_KEY: ${file(../shared-config.yml):rappiApiKey}
+
+functions:
+  authorizer:
+    handler: authorizer.handler
+
+  crearPedido:
+    handler: pedidos.crear
+    events:
+      - httpApi:
+          path: /pedidos
+          method: post
+          authorizer:
+            name: jwtAuth
+
+  crearPedidoRappi:
+    handler: pedidos.crear_rappi
+    events:
+      - httpApi:
+          path: /pedidos/rappi
+          method: post
+
+  obtenerPedido:
+    handler: pedidos.obtener
+    events:
+      - httpApi:
+          path: /pedidos/{order_id}
+          method: get
+          authorizer:
+            name: jwtAuth
+
+  listarPedidos:
+    handler: pedidos.listar
+    events:
+      - httpApi:
+          path: /pedidos
+          method: get
+          authorizer:
+            name: jwtAuth
+
+  # Consumidor EDA: mantiene t_pedidos.status sincronizado con el workflow
+  actualizarStatus:
+    handler: pedidos.actualizar_status
+    events:
+      - eventBridge:
+          # ARN = usa el bus existente (creado por CLI); con solo el nombre intentaría crearlo
+          eventBus: arn:aws:events:us-east-1:${aws:accountId}:event-bus/pedidos-bus
+          pattern:
+            source:
+              - ms.workflow
+            detail-type:
+              - order.step.changed
+              - order.completed
+              - order.failed
+
+resources:
+  Resources:
+    OrdersTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: t_pedidos-${sls:stage}
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - AttributeName: PK
+            AttributeType: S
+          - AttributeName: SK
+            AttributeType: S
+          - AttributeName: GSI1PK
+            AttributeType: S
+          - AttributeName: GSI1SK
+            AttributeType: S
+        KeySchema:
+          - AttributeName: PK
+            KeyType: HASH
+          - AttributeName: SK
+            KeyType: RANGE
+        GlobalSecondaryIndexes:
+          - IndexName: GSI1
+            KeySchema:
+              - AttributeName: GSI1PK
+                KeyType: HASH
+              - AttributeName: GSI1SK
+                KeyType: RANGE
+            Projection:
+              ProjectionType: ALL

@@ -1,0 +1,4 @@
+# Copia este archivo como shared-config.yml (gitignored) en la raíz del repo
+# y cambia los valores. NUNCA subas shared-config.yml al repositorio.
+jwtSecret: CAMBIA-ESTE-SECRETO-LARGO-Y-ALEATORIO
+rappiApiKey: CAMBIA-ESTA-CLAVE-PARA-RAPPI
