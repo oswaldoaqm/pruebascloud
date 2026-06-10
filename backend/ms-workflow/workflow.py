@@ -72,12 +72,12 @@ def asignar_tarea(event, context):
 
 
 def notify_rappi(event, context):
-    """Consumidor EventBridge (solo origin=RAPPI): actualiza el estado en 'Rappi' (GCP API-2)."""
+    """Consumidor EventBridge (solo origin=RAPPI): actualiza el estado en 'Rappi' (API-2 en OCI)."""
     import urllib.request
 
-    url = os.environ.get("GCP_STATUS_URL", "")
+    url = os.environ.get("RAPPI_STATUS_URL", "")
     if not url:
-        print("GCP_STATUS_URL no configurada; se omite notificación")
+        print("RAPPI_STATUS_URL no configurada; se omite notificación")
         return {"ok": False, "skipped": True}
 
     detail = event["detail"]
@@ -97,7 +97,7 @@ def notify_rappi(event, context):
     }).encode()
 
     req = urllib.request.Request(
-        url, data=body, method="POST",
+        f"{url}/status", data=body, method="POST",
         headers={"Content-Type": "application/json",
                  "x-api-key": os.environ["RAPPI_API_KEY"]},
     )

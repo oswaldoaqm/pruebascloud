@@ -23,8 +23,8 @@ provider:
     STATE_MACHINE_ARN: arn:aws:states:us-east-1:${aws:accountId}:stateMachine:pedido-workflow-${sls:stage}
     JWT_SECRET: ${file(../shared-config.yml):jwtSecret}
     RAPPI_API_KEY: ${file(../shared-config.yml):rappiApiKey}
-    # URL de la API-2 en GCP (vacía hasta desplegar GCP; la Lambda lo tolera)
-    GCP_STATUS_URL: ${file(../shared-config.yml):gcpStatusUrl, ''}
+    # URL de la API-2 (Rappi Status) en OCI; vacía hasta desplegarla (la Lambda lo tolera)
+    RAPPI_STATUS_URL: ${file(../shared-config.yml):rappiStatusUrl, ''}
 
 functions:
   authorizer:

@@ -1,5 +1,5 @@
 # Sistema de Gestión de Pedidos — Papa Johns (Grupo 2)
-**CS2032 Cloud Computing · Arquitectura serverless, multi-tenant, event-driven, multi-nube (AWS + GCP)**
+**CS2032 Cloud Computing · Arquitectura serverless, multi-tenant, event-driven, multi-nube (AWS + OCI)**
 
 ## Arquitectura
 
@@ -7,7 +7,7 @@
 flowchart LR
   C[Web Clientes\nAmplify] -->|JWT| AG1[API Gateway]
   T[Web Trabajadores\nAmplify] -->|JWT| AG2[API Gateway]
-  R[GCP API-1 Rappi Ingest] -->|x-api-key| AG1
+  R[OCI API-1 Rappi Ingest\nDocker] -->|x-api-key| AG1
   AG1 --> P[ms-pedidos\nLambda + DynamoDB]
   AG2 --> W[ms-workflow\nLambda + DynamoDB]
   P -->|order.placed| EB[(EventBridge\npedidos-bus)]
@@ -15,7 +15,7 @@ flowchart LR
   SF -->|waitForTaskToken| W
   W -->|order.step.changed / completed / failed| EB
   EB --> P
-  EB -.->|origin=RAPPI| NR[Lambda notify_rappi] -.-> R2[GCP API-2 Rappi Status\nFirestore]
+  EB -.->|origin=RAPPI| NR[Lambda notify_rappi] -.-> R2[OCI API-2 Rappi Status\nDocker + SQLite]
   U[ms-usuarios] --- AG1
   PR[ms-productos + S3 imágenes] --- AG1
 ```
@@ -29,7 +29,7 @@ flowchart LR
 | ms-pedidos | Pedidos (web/Rappi), eventos | t_pedidos | POST /pedidos, POST /pedidos/rappi, GET /pedidos[/{id}] |
 | ms-workflow | Step Functions, task tokens, dashboard | t_workflow | GET/POST /tareas..., GET /dashboard |
 
-**Flujo de un pedido:** `POST /pedidos` → evento `order.placed` → Step Functions inicia → cada paso humano (COCINAR→EMPACAR→REPARTIR→ENTREGAR) pausa con *Wait for Callback with Task Token*; el trabajador completa vía API → `send_task_success` → avanza. Cada transición publica `order.step.changed` (consumido por ms-pedidos para actualizar status; si origin=RAPPI, también notifica a GCP).
+**Flujo de un pedido:** `POST /pedidos` → evento `order.placed` → Step Functions inicia → cada paso humano (COCINAR→EMPACAR→REPARTIR→ENTREGAR) pausa con *Wait for Callback with Task Token*; el trabajador completa vía API → `send_task_success` → avanza. Cada transición publica `order.step.changed` (consumido por ms-pedidos para actualizar status; si origin=RAPPI, también notifica a la API-2 en OCI — ver `oci/README.md`).
 
 **Multi-tenancy (modelo pool):** `tenant_id` en el claim del JWT y como prefijo de todas las PK (`TENANT#...`). El authorizer inyecta el tenant; ningún handler lo acepta del body.
 
