@@ -13,7 +13,7 @@ events = boto3.client("events")
 BUS = os.environ["EVENT_BUS"]
 RAPPI_API_KEY = os.environ["RAPPI_API_KEY"]
 
-ESTADOS = ["RECEIVED", "COOKING", "PACKING", "DELIVERING", "DELIVERED"]
+ESTADOS = ["RECEIVED", "COOKING", "PACKING", "DELIVERING", "DELIVERED", "FAILED"]
 
 
 def _now() -> str:

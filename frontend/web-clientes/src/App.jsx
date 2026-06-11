@@ -211,8 +211,10 @@ function Tracker({ sesion, orderId, onClose }) {
             </div>
           ))}
         </div>
-        <p style={{ textAlign: 'center', color: '#888', marginTop: 8 }}>
-          {status === 'DELIVERED' ? '🍕 ¡Buen provecho!' : 'Actualizando cada 5 segundos…'}
+        <p style={{ textAlign: 'center', color: status === 'FAILED' ? '#ce1126' : '#888', marginTop: 8 }}>
+          {status === 'DELIVERED' ? '🍕 ¡Buen provecho!'
+            : status === 'FAILED' ? '⚠️ Hubo un problema con tu pedido. Contáctanos.'
+            : 'Actualizando cada 5 segundos…'}
         </p>
         <button className="btn btn-green" style={{ width: '100%', marginTop: 12 }} onClick={onClose}>Cerrar</button>
       </div>
