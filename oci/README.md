@@ -17,22 +17,26 @@ ssh -i <llave>.key opc@<IP_PUBLICA>
 
 # Dentro de la VM:
 sudo dnf install -y docker git
+sudo loginctl enable-linger opc   # que los contenedores sobrevivan al cerrar la sesión SSH
 git clone https://github.com/oswaldoaqm/pruebascloud.git && cd pruebascloud
 
 # Variables (usar los valores reales)
 RAPPI_KEY=<rappiApiKey de shared-config.yml>
-AWS_URL=https://os2ehl7kg2.execute-api.us-east-1.amazonaws.com
-IP_PRIVADA=$(hostname -I | awk '{print $1}')
+AWS_URL=<URL de ms-pedidos en AWS>
+
+# Red compartida (podman rootless no permite contenedor→IP del host; por nombre sí)
+docker network create rappi-net
 
 # API-2 (status) primero
 cd oci/rappi-status && docker build -t rappi-status . && cd ../..
-docker run -d --name rappi-status -p 8001:8000 -e API_KEY=$RAPPI_KEY rappi-status
+docker run -d --name rappi-status --network rappi-net -p 8001:8000 \
+  -e API_KEY=$RAPPI_KEY rappi-status
 
 # API-1 (ingest)
 cd oci/rappi-ingest && docker build -t rappi-ingest . && cd ../..
-docker run -d --name rappi-ingest -p 8000:8000 \
+docker run -d --name rappi-ingest --network rappi-net -p 8000:8000 \
   -e API_KEY=$RAPPI_KEY -e AWS_PEDIDOS_URL=$AWS_URL \
-  -e STATUS_URL=http://$IP_PRIVADA:8001 rappi-ingest
+  -e STATUS_URL=http://rappi-status:8000 rappi-ingest
 
 # Firewall del SO
 sudo firewall-cmd --permanent --add-port=8000/tcp --add-port=8001/tcp
@@ -42,6 +46,10 @@ sudo firewall-cmd --reload
 curl http://localhost:8000/   # {"service":"rappi-ingest","ok":true}
 curl http://localhost:8001/   # {"service":"rappi-status","ok":true}
 ```
+
+Notas: en `docker build`, si pregunta por la imagen, elegir `docker.io/library/python:3.12-slim`.
+Si la VM se reinicia: `docker start rappi-status rappi-ingest`.
+Algunas redes locales (ej. wifi institucional) bloquean los puertos 8000/8001: probar desde Cloud Shell o hotspot.
 
 ## Conexión AWS → OCI
 
@@ -65,5 +73,3 @@ curl -X POST http://<IP_PUBLICA_OCI>:8000/orders -H "Content-Type: application/j
 # 3. Ver el estado actualizado "en Rappi" con el historial de pasos
 curl http://<IP_PUBLICA_OCI>:8001/orders/<ORDER_ID>
 ```
-
-Si la VM se reinicia: `docker start rappi-status rappi-ingest`.
