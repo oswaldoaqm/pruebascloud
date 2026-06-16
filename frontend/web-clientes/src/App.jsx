@@ -1,4 +1,8 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, useCallback } from 'react'
+import {
+  ShoppingCart, User, LogOut, Plus, Minus, X, Moon, Sun, MapPin,
+  ClipboardList, Check, Pizza, PartyPopper,
+} from 'lucide-react'
 import { API_USUARIOS, API_PRODUCTOS, API_PEDIDOS, API_SEDES, TENANTS } from './config.js'
 
 const CATEGORIAS = [
@@ -9,9 +13,27 @@ const CATEGORIAS = [
   { id: 'postres', label: 'Postres' },
 ]
 const EMOJI = { pizzas: '🍕', complementos: '🧄', bebidas: '🥤', postres: '🍫' }
+const soles = (n) => 'S/ ' + Number(n || 0).toFixed(2)
+
+/* ---------- Toasts (hook simple) ---------- */
+function useToasts() {
+  const [toasts, setToasts] = useState([])
+  const push = useCallback((msg, icon) => {
+    const id = Math.random()
+    setToasts(t => [...t, { id, msg, icon }])
+    setTimeout(() => setToasts(t => t.filter(x => x.id !== id)), 2600)
+  }, [])
+  const view = (
+    <div className="toasts">
+      {toasts.map(t => <div className="toast" key={t.id}>{t.icon}{t.msg}</div>)}
+    </div>
+  )
+  return [push, view]
+}
 
 export default function App() {
-  const [sedes, setSedes] = useState(TENANTS)            // respaldo; se reemplaza con backend
+  const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'light')
+  const [sedes, setSedes] = useState(TENANTS)
   const [tenant, setTenant] = useState(TENANTS[0].id)
   const [productos, setProductos] = useState([])
   const [categoria, setCategoria] = useState('todas')
@@ -19,29 +41,13 @@ export default function App() {
   const [sesion, setSesion] = useState(() => JSON.parse(localStorage.getItem('sesion') || 'null'))
   const [showLogin, setShowLogin] = useState(false)
   const [showCart, setShowCart] = useState(false)
+  const [showPedidos, setShowPedidos] = useState(false)
   const [cart, setCart] = useState([])
   const [tracking, setTracking] = useState(null)
   const [ordenando, setOrdenando] = useState(false)
-  const [showPedidos, setShowPedidos] = useState(false)
+  const [toast, toastView] = useToasts()
 
-  const ordenar = async () => {
-    if (!sesion) { setShowCart(false); setShowLogin(true); return }
-    setOrdenando(true)
-    try {
-      const r = await fetch(`${API_PEDIDOS}/pedidos`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${sesion.token}` },
-        body: JSON.stringify({ items: cart.map(i => ({ product_id: i.product_id, nombre: i.nombre, precio: i.precio, cant: i.cant })) }),
-      })
-      const d = await r.json()
-      if (!r.ok) throw new Error(d.error || 'Error al crear el pedido')
-      setCart([]); setShowCart(false); setTracking(d.order_id)
-    } catch (e) {
-      alert(e.message)
-    } finally {
-      setOrdenando(false)
-    }
-  }
+  useEffect(() => { document.documentElement.setAttribute('data-theme', theme); localStorage.setItem('theme', theme) }, [theme])
 
   useEffect(() => {
     fetch(`${API_SEDES}/sedes`).then(r => r.json())
@@ -52,114 +58,186 @@ export default function App() {
   useEffect(() => {
     setCargando(true)
     fetch(`${API_PRODUCTOS}/productos?tenant_id=${tenant}`)
-      .then(r => r.json())
-      .then(d => setProductos(d.productos || []))
-      .catch(() => setProductos([]))
-      .finally(() => setCargando(false))
-    setCart([]) // el carrito no cruza tenants
+      .then(r => r.json()).then(d => setProductos(d.productos || []))
+      .catch(() => setProductos([])).finally(() => setCargando(false))
+    setCart([])
   }, [tenant])
 
   const visibles = useMemo(
     () => categoria === 'todas' ? productos : productos.filter(p => p.categoria === categoria),
-    [productos, categoria]
-  )
+    [productos, categoria])
+  const totalItems = cart.reduce((s, i) => s + i.cant, 0)
   const total = cart.reduce((s, i) => s + i.precio * i.cant, 0)
 
   const addCart = (p) => {
     setCart(prev => {
       const ex = prev.find(i => i.product_id === p.product_id)
-      return ex
-        ? prev.map(i => i.product_id === p.product_id ? { ...i, cant: i.cant + 1 } : i)
-        : [...prev, { ...p, cant: 1 }]
+      return ex ? prev.map(i => i.product_id === p.product_id ? { ...i, cant: i.cant + 1 } : i)
+                : [...prev, { ...p, cant: 1 }]
     })
+    toast(`${p.nombre} agregado`, <Check size={16} />)
   }
+  const setQty = (pid, d) => setCart(prev => prev.flatMap(i => {
+    if (i.product_id !== pid) return [i]
+    const c = i.cant + d
+    return c <= 0 ? [] : [{ ...i, cant: c }]
+  }))
 
-  const logout = () => { localStorage.removeItem('sesion'); setSesion(null) }
+  const logout = () => { localStorage.removeItem('sesion'); setSesion(null); toast('Sesión cerrada') }
+
+  const ordenar = async () => {
+    if (!sesion) { setShowCart(false); setShowLogin(true); return }
+    setOrdenando(true)
+    try {
+      const r = await fetch(`${API_PEDIDOS}/pedidos`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${sesion.token}` },
+        body: JSON.stringify({ items: cart.map(i => ({ product_id: i.product_id, nombre: i.nombre, precio: i.precio, cant: i.cant })) }),
+      })
+      const d = await r.json()
+      if (!r.ok) throw new Error(d.error || 'Error al crear el pedido')
+      setCart([]); setShowCart(false); setTracking(d.order_id); toast('¡Pedido enviado!', <Pizza size={16} />)
+    } catch (e) { toast(e.message) } finally { setOrdenando(false) }
+  }
 
   return (
     <div>
       <header className="header">
-        <div className="logo">Papa Johns<span> Pizza</span></div>
-        <select value={tenant} onChange={e => setTenant(e.target.value)}>
-          {sedes.map(t => <option key={t.id} value={t.id}>{t.nombre}</option>)}
-        </select>
-        <div className="header-actions">
-          <button className="btn btn-white" onClick={() => setShowCart(true)}>
-            🛒 Carrito {cart.length > 0 && <span className="badge">{cart.reduce((s, i) => s + i.cant, 0)}</span>}
-          </button>
-          {sesion
-            ? <>
-                <span>Hola, <b>{sesion.nombre}</b></span>
-                <button className="btn btn-white" onClick={() => setShowPedidos(true)}>Mis pedidos</button>
-                <button className="btn btn-red" onClick={logout}>Salir</button>
-              </>
-            : <button className="btn btn-red" onClick={() => setShowLogin(true)}>Iniciar sesión</button>}
+        <div className="logo"><Pizza size={24} />Papa Johns<span className="dot">.</span></div>
+        <div className="sede-select">
+          <MapPin size={16} />
+          <select value={tenant} onChange={e => setTenant(e.target.value)}>
+            {sedes.map(t => <option key={t.id} value={t.id}>{t.nombre}</option>)}
+          </select>
         </div>
+        <div className="spacer" />
+        <button className="icon-btn" onClick={() => setTheme(t => t === 'light' ? 'dark' : 'light')} title="Tema">
+          {theme === 'light' ? <Moon size={20} /> : <Sun size={20} />}
+        </button>
+        <button className="icon-btn cart-btn" onClick={() => setShowCart(true)} title="Carrito">
+          <ShoppingCart size={20} />
+          {totalItems > 0 && <span className="cart-badge" key={totalItems}>{totalItems}</span>}
+        </button>
+        {sesion ? (
+          <div className="user-chip">
+            <User size={18} /> <b>{sesion.nombre.split(' ')[0]}</b>
+            <button className="btn btn-ghost" style={{ padding: '7px 14px' }} onClick={() => setShowPedidos(true)}><ClipboardList size={16} />Pedidos</button>
+            <button className="icon-btn" onClick={logout} title="Salir"><LogOut size={18} /></button>
+          </div>
+        ) : (
+          <button className="btn btn-red" onClick={() => setShowLogin(true)}><User size={16} />Ingresar</button>
+        )}
       </header>
 
       <section className="hero">
-        <h1>Mejores ingredientes. Mejor pizza.</h1>
-        <p>Pide online y sigue tu pedido en tiempo real</p>
+        <h1>Mejores ingredientes.<br />Mejor pizza.</h1>
+        <p>Pide online y sigue tu pedido en tiempo real, paso a paso.</p>
+        <div className="pizza">🍕</div>
       </section>
 
       <div className="tabs">
         {CATEGORIAS.map(c => (
-          <button key={c.id} className={`tab ${categoria === c.id ? 'active' : ''}`}
-                  onClick={() => setCategoria(c.id)}>{c.label}</button>
+          <button key={c.id} className={`tab ${categoria === c.id ? 'active' : ''}`} onClick={() => setCategoria(c.id)}>{c.label}</button>
         ))}
       </div>
 
-      {cargando
-        ? <div className="empty">Cargando catálogo…</div>
-        : <div className="grid">
-            {visibles.map(p => (
-              <div className="card" key={p.product_id}>
-                <div className="card-img">
-                  <img src={p.image_url} alt={p.nombre}
-                       onError={e => { e.target.style.display = 'none'; e.target.parentNode.append(EMOJI[p.categoria] || '🍕') }} />
-                </div>
-                <div className="card-body">
-                  <h3>{p.nombre}</h3>
-                  <p>{p.descripcion}</p>
-                  <div className="card-footer">
-                    <span className="precio">S/ {Number(p.precio).toFixed(2)}</span>
-                    <button className="btn btn-green" onClick={() => addCart(p)}>Agregar</button>
-                  </div>
+      {cargando ? (
+        <div className="grid">
+          {Array.from({ length: 8 }).map((_, i) => (
+            <div className="sk" key={i}><div className="sk-img shimmer" /><div className="sk-line shimmer" /><div className="sk-line short shimmer" /></div>
+          ))}
+        </div>
+      ) : (
+        <div className="grid">
+          {visibles.map(p => (
+            <div className="card" key={p.product_id}>
+              <div className="card-img">
+                <img src={p.image_url} alt={p.nombre}
+                     onError={e => { e.target.style.display = 'none'; e.target.parentNode.append(EMOJI[p.categoria] || '🍕') }} />
+              </div>
+              <div className="card-body">
+                <span className="card-cat">{p.categoria}</span>
+                <h3>{p.nombre}</h3>
+                <p>{p.descripcion}</p>
+                <div className="card-footer">
+                  <span className="precio">{soles(p.precio)}</span>
+                  <button className="btn btn-green" onClick={() => addCart(p)}><Plus size={16} />Agregar</button>
                 </div>
               </div>
-            ))}
-          </div>}
-
-      {tracking && <Tracker sesion={sesion} orderId={tracking} onClose={() => setTracking(null)} />}
-
-      {showPedidos && sesion && (
-        <MisPedidos sesion={sesion} onClose={() => setShowPedidos(false)}
-                    onTrack={oid => { setShowPedidos(false); setTracking(oid) }} />
-      )}
-
-      {showLogin && <LoginModal tenant={tenant} onClose={() => setShowLogin(false)}
-        onLogin={s => { localStorage.setItem('sesion', JSON.stringify(s)); setSesion(s); setShowLogin(false) }} />}
-
-      {showCart && (
-        <div className="cart-drawer">
-          <h2>Tu pedido</h2>
-          <div className="cart-items">
-            {cart.length === 0 && <div className="empty">Carrito vacío</div>}
-            {cart.map(i => (
-              <div className="cart-item" key={i.product_id}>
-                <span>{i.cant}x {i.nombre}</span>
-                <span>S/ {(i.precio * i.cant).toFixed(2)}</span>
-                <button onClick={() => setCart(c => c.filter(x => x.product_id !== i.product_id))}>×</button>
-              </div>
-            ))}
-          </div>
-          <div className="cart-total"><span>Total</span><span>S/ {total.toFixed(2)}</span></div>
-          <button className="btn btn-red" disabled={cart.length === 0 || ordenando} onClick={ordenar}>
-            {ordenando ? 'Enviando…' : 'Ordenar ahora'}
-          </button>
-          <button className="btn btn-white" style={{ marginTop: 8 }} onClick={() => setShowCart(false)}>Cerrar</button>
+            </div>
+          ))}
+          {visibles.length === 0 && <div className="empty">No hay productos en esta categoría.</div>}
         </div>
       )}
+
+      {showCart && (
+        <>
+          <div className="overlay" onClick={() => setShowCart(false)} />
+          <aside className="drawer">
+            <h2><ShoppingCart size={22} />Tu pedido</h2>
+            <div className="drawer-items">
+              {cart.length === 0 && <div className="empty">Tu carrito está vacío 🛒</div>}
+              {cart.map(i => (
+                <div className="line" key={i.product_id}>
+                  <span className="ln-name">{i.nombre}</span>
+                  <div className="qty">
+                    <button onClick={() => setQty(i.product_id, -1)}><Minus size={14} /></button>
+                    <b>{i.cant}</b>
+                    <button onClick={() => setQty(i.product_id, +1)}><Plus size={14} /></button>
+                  </div>
+                  <span className="ln-price">{soles(i.precio * i.cant)}</span>
+                </div>
+              ))}
+            </div>
+            <div className="drawer-total"><span>Total</span><span>{soles(total)}</span></div>
+            <button className="btn btn-red" style={{ justifyContent: 'center' }} disabled={cart.length === 0 || ordenando} onClick={ordenar}>
+              {ordenando ? 'Enviando…' : 'Ordenar ahora'}
+            </button>
+            <button className="btn btn-ghost" style={{ justifyContent: 'center', marginTop: 8 }} onClick={() => setShowCart(false)}>Seguir comprando</button>
+          </aside>
+        </>
+      )}
+
+      {tracking && <Tracker sesion={sesion} orderId={tracking} onClose={() => setTracking(null)} />}
+      {showPedidos && sesion && <MisPedidos sesion={sesion} onClose={() => setShowPedidos(false)} onTrack={oid => { setShowPedidos(false); setTracking(oid) }} />}
+      {showLogin && <LoginModal tenant={tenant} onClose={() => setShowLogin(false)} toast={toast}
+        onLogin={s => { localStorage.setItem('sesion', JSON.stringify(s)); setSesion(s); setShowLogin(false); toast(`Hola, ${s.nombre.split(' ')[0]}`) }} />}
+      {toastView}
+    </div>
+  )
+}
+
+const FLOW = ['RECEIVED', 'COOKING', 'PACKING', 'DELIVERING', 'DELIVERED']
+const FLOW_LABEL = { RECEIVED: 'Recibido', COOKING: 'En cocina', PACKING: 'Empacando', DELIVERING: 'En camino', DELIVERED: 'Entregado', FAILED: 'Fallido' }
+
+function Tracker({ sesion, orderId, onClose }) {
+  const [status, setStatus] = useState('RECEIVED')
+  useEffect(() => {
+    const load = () => fetch(`${API_PEDIDOS}/pedidos/${orderId}`, { headers: { Authorization: `Bearer ${sesion.token}` } })
+      .then(r => r.json()).then(d => setStatus(d.status || 'RECEIVED')).catch(() => {})
+    load(); const t = setInterval(load, 5000); return () => clearInterval(t)
+  }, [orderId])
+  const idx = FLOW.indexOf(status)
+  return (
+    <div className="modal-center"><div className="overlay" onClick={onClose} />
+      <div className="modal">
+        <button className="icon-btn close" onClick={onClose}><X size={18} /></button>
+        <h2>Pedido #{orderId}</h2>
+        <div className="track">
+          {FLOW.map((s, i) => (
+            <div key={s} className={`track-step ${i < idx ? 'done' : i === idx ? 'current' : ''}`}>
+              <span className={`rail ${i < idx ? 'filled' : ''}`} />
+              <span className="dot">{i < idx ? <Check size={16} /> : i === idx ? '●' : i + 1}</span>
+              <span className="lbl">{FLOW_LABEL[s]}</span>
+            </div>
+          ))}
+        </div>
+        <p className="track-done-msg">
+          {status === 'DELIVERED' ? <><PartyPopper size={18} style={{ verticalAlign: 'middle' }} /> ¡Buen provecho!</>
+            : status === 'FAILED' ? '⚠️ Hubo un problema con tu pedido.'
+            : 'Actualizando en tiempo real…'}
+        </p>
+        <button className="btn btn-ghost" style={{ width: '100%', justifyContent: 'center', marginTop: 12 }} onClick={onClose}>Cerrar</button>
+      </div>
     </div>
   )
 }
@@ -171,65 +249,28 @@ function MisPedidos({ sesion, onClose, onTrack }) {
       .then(r => r.json()).then(d => setPedidos((d.pedidos || []).reverse())).catch(() => setPedidos([]))
   }, [])
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" onClick={e => e.stopPropagation()}>
+    <div className="modal-center"><div className="overlay" onClick={onClose} />
+      <div className="modal">
+        <button className="icon-btn close" onClick={onClose}><X size={18} /></button>
         <h2>Mis pedidos</h2>
-        {pedidos === null && <p>Cargando…</p>}
-        {pedidos?.length === 0 && <p>Aún no tienes pedidos.</p>}
+        {pedidos === null && <div className="empty">Cargando…</div>}
+        {pedidos?.length === 0 && <div className="empty">Aún no tienes pedidos.</div>}
         {pedidos?.map(p => (
           <div className="pedido-row" key={p.order_id}>
             <div>
-              <b>#{p.order_id}</b> · S/ {Number(p.total).toFixed(2)}
+              <b>#{p.order_id}</b> · {soles(p.total)}
               <div className="pedido-fecha">{new Date(p.created_at).toLocaleString('es-PE')}</div>
             </div>
             <span className={`chip ${p.status}`}>{FLOW_LABEL[p.status] || p.status}</span>
-            <button className="btn btn-green" onClick={() => onTrack(p.order_id)}>Ver</button>
+            <button className="btn btn-green" style={{ padding: '7px 14px' }} onClick={() => onTrack(p.order_id)}>Ver</button>
           </div>
         ))}
-        <button className="btn btn-white" style={{ width: '100%', marginTop: 12 }} onClick={onClose}>Cerrar</button>
       </div>
     </div>
   )
 }
 
-const FLOW = ['RECEIVED', 'COOKING', 'PACKING', 'DELIVERING', 'DELIVERED']
-const FLOW_LABEL = { RECEIVED: 'Recibido', COOKING: 'En cocina', PACKING: 'Empacando', DELIVERING: 'En camino', DELIVERED: 'Entregado', FAILED: 'Fallido' }
-
-function Tracker({ sesion, orderId, onClose }) {
-  const [status, setStatus] = useState('RECEIVED')
-  useEffect(() => {
-    const load = () =>
-      fetch(`${API_PEDIDOS}/pedidos/${orderId}`, { headers: { Authorization: `Bearer ${sesion.token}` } })
-        .then(r => r.json()).then(d => setStatus(d.status || 'RECEIVED')).catch(() => {})
-    load()
-    const t = setInterval(load, 5000) // polling: estado casi en tiempo real
-    return () => clearInterval(t)
-  }, [orderId])
-  const idx = FLOW.indexOf(status)
-  return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" onClick={e => e.stopPropagation()}>
-        <h2>Pedido #{orderId}</h2>
-        <div className="track">
-          {FLOW.map((s, i) => (
-            <div key={s} className={`track-step ${i <= idx ? 'done' : ''}`}>
-              <div className="dot">{i < idx ? '✓' : i === idx ? '●' : ''}</div>
-              <span>{FLOW_LABEL[s]}</span>
-            </div>
-          ))}
-        </div>
-        <p style={{ textAlign: 'center', color: status === 'FAILED' ? '#ce1126' : '#888', marginTop: 8 }}>
-          {status === 'DELIVERED' ? '🍕 ¡Buen provecho!'
-            : status === 'FAILED' ? '⚠️ Hubo un problema con tu pedido. Contáctanos.'
-            : 'Actualizando cada 5 segundos…'}
-        </p>
-        <button className="btn btn-green" style={{ width: '100%', marginTop: 12 }} onClick={onClose}>Cerrar</button>
-      </div>
-    </div>
-  )
-}
-
-function LoginModal({ tenant, onClose, onLogin }) {
+function LoginModal({ tenant, onClose, onLogin, toast }) {
   const [modo, setModo] = useState('login')
   const [form, setForm] = useState({ email: '', password: '', nombre: '' })
   const [error, setError] = useState('')
@@ -254,22 +295,20 @@ function LoginModal({ tenant, onClose, onLogin }) {
       const d = await r.json()
       if (!r.ok) throw new Error(d.error || 'Credenciales inválidas')
       onLogin({ token: d.token, nombre: d.nombre, role: d.role, tenant_id: d.tenant_id })
-    } catch (e) {
-      setError(e.message)
-    } finally {
-      setEnviando(false)
-    }
+    } catch (e) { setError(e.message) } finally { setEnviando(false) }
   }
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" onClick={e => e.stopPropagation()}>
+    <div className="modal-center"><div className="overlay" onClick={onClose} />
+      <div className="modal">
+        <button className="icon-btn close" onClick={onClose}><X size={18} /></button>
         <h2>{modo === 'login' ? 'Iniciar sesión' : 'Crear cuenta'}</h2>
-        {modo === 'registro' && <input placeholder="Nombre" value={form.nombre} onChange={set('nombre')} />}
-        <input placeholder="Email" type="email" value={form.email} onChange={set('email')} />
-        <input placeholder="Contraseña" type="password" value={form.password} onChange={set('password')} />
+        {modo === 'registro' && <input className="field" placeholder="Nombre" value={form.nombre} onChange={set('nombre')} />}
+        <input className="field" placeholder="Email" type="email" value={form.email} onChange={set('email')} />
+        <input className="field" placeholder="Contraseña" type="password" value={form.password} onChange={set('password')}
+               onKeyDown={e => e.key === 'Enter' && submit()} />
         {error && <div className="error">{error}</div>}
-        <button className="btn btn-red" style={{ width: '100%' }} disabled={enviando} onClick={submit}>
+        <button className="btn btn-red" style={{ width: '100%', justifyContent: 'center' }} disabled={enviando} onClick={submit}>
           {enviando ? 'Enviando…' : modo === 'login' ? 'Entrar' : 'Registrarme'}
         </button>
         <div className="link" onClick={() => setModo(m => m === 'login' ? 'registro' : 'login')}>
