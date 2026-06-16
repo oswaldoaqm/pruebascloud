@@ -4,9 +4,11 @@
 # Uso: bash scripts/smoke-test.sh
 set -u
 
-URL_USU=https://urvrhgysm5.execute-api.us-east-1.amazonaws.com
-URL_PED=https://os2ehl7kg2.execute-api.us-east-1.amazonaws.com
-URL_WF=https://s1fn3k0udc.execute-api.us-east-1.amazonaws.com
+# Backend consolidado: UNA sola API Gateway para todo. Reemplazar tras el deploy.
+BASE=https://REEMPLAZAR.execute-api.us-east-1.amazonaws.com
+URL_USU=$BASE
+URL_PED=$BASE
+URL_WF=$BASE
 TENANT=pj-miraflores
 PASS=123456
 

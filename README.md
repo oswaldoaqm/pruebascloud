@@ -42,39 +42,48 @@ Requisitos: Node 18+, `npm i -g serverless`, credenciales AWS en `~/.aws/credent
 cp backend/shared-config.example.yml backend/shared-config.yml
 nano backend/shared-config.yml
 
-# 1. Bus de eventos (una vez)
-aws events create-event-bus --name pedidos-bus
+# 1. UN SOLO deploy levanta TODO (API Gateway única, 4 tablas, bus, Step Functions)
+cd backend && sls deploy
 
-# 2. Microservicios EN ESTE ORDEN (anotar la URL que devuelve cada deploy)
-cd backend/ms-usuarios  && sls deploy && cd ../..
-cd backend/ms-productos && sls deploy && sls invoke -f seed && cd ../..
-cd backend/ms-pedidos   && sls deploy && cd ../..
-cd backend/ms-workflow  && sls deploy && cd ../..
+# 2. Cargar catálogo y usuarios demo (las 4 sedes)
+sls invoke -f seedProductos
+sls invoke -f seedUsuarios
+cd ..
 
 # 3. Subir imágenes del catálogo
 aws s3 cp ./images s3://pj-grupo2-imagenes-<ACCOUNT_ID>/ --recursive
 
-# 4. Frontends: poner las URLs de los deploys en frontend/*/src/config.js
-#    y en scripts/smoke-test.sh; push; conectar el repo en Amplify Hosting
+# 4. Tomar la ÚNICA URL del deploy y ponerla en API_BASE de
+#    frontend/web-clientes/src/config.js, frontend/web-trabajadores/src/config.js
+#    y BASE de scripts/smoke-test.sh; push; conectar repo en Amplify Hosting
 #    (2 apps monorepo: appRoot frontend/web-clientes y frontend/web-trabajadores)
 
-# 5. Usuarios demo + prueba end-to-end automática
+# 5. Prueba end-to-end automática
 bash scripts/smoke-test.sh
 ```
+
+El bus de EventBridge lo crea el propio `sls deploy` (no hay paso manual). Una sola API Gateway expone todas las rutas (`/auth/*`, `/productos`, `/pedidos*`, `/tareas*`, `/dashboard`).
 
 Estructura del repositorio:
 
 ```
 ├── backend/
+│   ├── serverless.yml              (UN solo servicio: API única + 4 tablas + SFN + bus)
 │   ├── shared-config.example.yml   (plantilla de secretos)
-│   ├── ms-usuarios/  ms-productos/  ms-pedidos/  ms-workflow/
+│   ├── authorizer.py jwt_utils.py  (compartidos)
+│   ├── usuarios.py productos.py pedidos.py workflow.py tareas.py seed_data.py
 ├── frontend/
 │   ├── web-clientes/  web-trabajadores/
 ├── images/            (catálogo: pizzas/ complementos/ bebidas/ postres/)
+├── oci/               (APIs Rappi en contenedores)
 ├── scripts/smoke-test.sh
 ├── amplify.yml
 └── README.md
 ```
+
+Microservicios = dominios lógicos dentro del servicio, cada uno con su propia tabla:
+`usuarios → t_usuarios`, `productos → t_productos`, `pedidos → t_pedidos`, `workflow → t_workflow`.
+Se comunican por eventos en EventBridge (EDA), nunca por llamadas directas.
 
 > Nota Learner Lab: las URLs de API Gateway cambian solo si se recrea el stack. Si pasa, actualizar `config.js` de ambos frontends y `scripts/smoke-test.sh`.
 
