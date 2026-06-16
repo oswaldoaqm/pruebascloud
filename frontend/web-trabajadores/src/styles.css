@@ -131,3 +131,18 @@ td select { color: var(--pj-green); }
 .bar-row .lbl { width: 120px; font-weight: 700; font-size: .85rem; }
 .bar-track { flex: 1; background: var(--surface-2); border-radius: 8px; height: 22px; overflow: hidden; }
 .bar-fill { height: 100%; background: var(--pj-green); border-radius: 8px; display: flex; align-items: center; padding-left: 8px; color: #fff; font-size: .75rem; font-weight: 700; min-width: 28px; }
+
+/* ============ ACCESIBILIDAD ============ */
+:focus-visible { outline: 2px solid var(--pj-green); outline-offset: 2px; border-radius: 4px; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .001ms !important; transition-duration: .001ms !important; } }
+
+/* ============ RESPONSIVE ============ */
+@media (max-width: 600px) {
+  .content { padding: 18px 14px; }
+  .page-title { font-size: 1.3rem; }
+  .charts { grid-template-columns: 1fr; }
+  .cards { grid-template-columns: 1fr 1fr; }
+  .cols { grid-template-columns: 1fr; }
+  .admin-nuevo { flex-direction: column; } .admin-nuevo input, .admin-nuevo select { width: 100%; }
+  table { font-size: .82rem; } th, td { padding: 9px 8px; }
+}

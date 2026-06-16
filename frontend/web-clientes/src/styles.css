@@ -195,4 +195,18 @@ h1, h2, h3, .logo { font-family: 'Poppins', sans-serif; }
 @keyframes toastIn { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
 
 .empty { text-align: center; padding: 48px; color: var(--text-soft); }
-@media (max-width: 600px) { .hero h1 { font-size: 1.7rem; } .hero .pizza { display: none; } .header { padding: 10px 14px; } .grid { padding: 16px 14px 40px; } .tabs { padding: 16px 14px 6px; } }
+
+/* ============ ACCESIBILIDAD ============ */
+:focus-visible { outline: 2px solid var(--pj-green); outline-offset: 2px; border-radius: 4px; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .001ms !important; transition-duration: .001ms !important; } }
+
+/* ============ RESPONSIVE ============ */
+@media (max-width: 640px) {
+  .hero { margin: 14px; padding: 30px 22px; } .hero h1 { font-size: 1.6rem; } .hero .pizza { display: none; }
+  .header { padding: 10px 14px; gap: 10px; flex-wrap: wrap; }
+  .header .sede-select { order: 3; flex: 1 1 100%; }
+  .user-chip span:first-child, .user-chip > b { display: none; }
+  .grid { padding: 16px 14px 40px; gap: 16px; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+  .tabs { padding: 16px 14px 6px; top: 62px; } .card-img { height: 130px; }
+  .drawer { width: 100%; } .modal { padding: 22px; }
+}
