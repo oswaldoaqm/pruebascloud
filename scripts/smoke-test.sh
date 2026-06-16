@@ -5,7 +5,7 @@
 set -u
 
 # Backend consolidado: UNA sola API Gateway para todo. Reemplazar tras el deploy.
-BASE=https://REEMPLAZAR.execute-api.us-east-1.amazonaws.com
+BASE=https://i9m3hyluue.execute-api.us-east-1.amazonaws.com
 URL_USU=$BASE
 URL_PED=$BASE
 URL_WF=$BASE

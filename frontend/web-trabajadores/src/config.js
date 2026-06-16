@@ -1,6 +1,6 @@
 // Toda la app usa UNA sola API Gateway (backend consolidado).
 // Actualizar API_BASE con la URL que devuelva el deploy.
-export const API_BASE = 'https://REEMPLAZAR.execute-api.us-east-1.amazonaws.com'
+export const API_BASE = 'https://i9m3hyluue.execute-api.us-east-1.amazonaws.com'
 
 export const API_USUARIOS = API_BASE
 export const API_PEDIDOS = API_BASE
