@@ -15,11 +15,6 @@ PASS=123456
 red() { echo -e "\033[31m$1\033[0m"; }
 green() { echo -e "\033[32m$1\033[0m"; }
 
-reg() { # email nombre role (ignora error si ya existe)
-  curl -s -X POST $URL_USU/auth/register -H "Content-Type: application/json" \
-    -d "{\"tenant_id\":\"$TENANT\",\"email\":\"$1\",\"password\":\"$PASS\",\"nombre\":\"$2\",\"role\":\"$3\"}" > /dev/null
-}
-
 login() {
   curl -s -X POST $URL_USU/auth/login -H "Content-Type: application/json" \
     -d "{\"tenant_id\":\"$TENANT\",\"email\":\"$1\",\"password\":\"$PASS\"}" \
@@ -34,12 +29,9 @@ paso() { # order_id paso token
   echo "  ✓ $2"
 }
 
-echo "== 1. Usuarios demo =="
-reg cocinero@pj.com Mario COCINERO
-reg despachador@pj.com Lucia DESPACHADOR
-reg repartidor@pj.com Pedro REPARTIDOR
+echo "== 1. Login de trabajadores (creados por seedUsuarios) =="
 TK_COC=$(login cocinero@pj.com); TK_DES=$(login despachador@pj.com); TK_REP=$(login repartidor@pj.com)
-[ -z "$TK_COC" ] && { red "FALLO: login"; exit 1; }
+[ -z "$TK_COC" ] && { red "FALLO: login (¿corriste 'sls invoke -f seedUsuarios'?)"; exit 1; }
 green "  ✓ logins OK"
 
 echo "== 2. Crear pedido =="

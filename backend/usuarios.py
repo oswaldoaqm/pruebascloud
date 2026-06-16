@@ -12,6 +12,8 @@ dynamodb = boto3.resource("dynamodb")
 tabla = dynamodb.Table(os.environ["USERS_TABLE"])
 
 ROLES_VALIDOS = {"CLIENTE", "COCINERO", "DESPACHADOR", "REPARTIDOR", "ADMIN", "SUPERADMIN"}
+# Roles que un ADMIN de sede puede asignar (NO puede crear SUPERADMIN: eso es nivel cadena).
+ROLES_ASIGNABLES = {"CLIENTE", "COCINERO", "DESPACHADOR", "REPARTIDOR", "ADMIN"}
 
 
 def _auth(event) -> dict:
@@ -42,12 +44,13 @@ def register(event, context):
     email = data.get("email", "").strip().lower()
     password = data.get("password", "")
     nombre = data.get("nombre", "").strip()
-    role = data.get("role", "CLIENTE").upper()
+    # SEGURIDAD: el registro público SIEMPRE crea CLIENTE. No se acepta el rol del
+    # body (evita que alguien se auto-asigne ADMIN/SUPERADMIN). El personal se crea
+    # desde el panel de administración (POST /usuarios, autorizado).
+    role = "CLIENTE"
 
     if not all([tenant_id, email, password, nombre]):
         return _response(400, {"error": "Faltan campos: tenant_id, email, password, nombre"})
-    if role not in ROLES_VALIDOS:
-        return _response(400, {"error": f"Role inválido. Usar: {sorted(ROLES_VALIDOS)}"})
     if len(password) < 6:
         return _response(400, {"error": "Password mínimo 6 caracteres"})
 
@@ -187,8 +190,8 @@ def crear_usuario(event, context):
 
     if not email or not nombre:
         return _response(400, {"error": "Faltan campos: email, nombre"})
-    if role not in ROLES_VALIDOS:
-        return _response(400, {"error": f"Role inválido. Usar: {sorted(ROLES_VALIDOS)}"})
+    if role not in ROLES_ASIGNABLES:
+        return _response(400, {"error": f"Role inválido. Usar: {sorted(ROLES_ASIGNABLES)}"})
 
     tenant_id = ctx["tenant_id"]  # del token, nunca del body
     salt = uuid.uuid4().hex
@@ -228,8 +231,8 @@ def actualizar_usuario(event, context):
     sets, names, values = [], {}, {}
     if "role" in data:
         role = data["role"].upper()
-        if role not in ROLES_VALIDOS:
-            return _response(400, {"error": f"Role inválido. Usar: {sorted(ROLES_VALIDOS)}"})
+        if role not in ROLES_ASIGNABLES:
+            return _response(400, {"error": f"Role inválido. Usar: {sorted(ROLES_ASIGNABLES)}"})
         sets.append("#r = :r"); names["#r"] = "role"; values[":r"] = role
     if "titulo" in data:
         sets.append("titulo = :t"); values[":t"] = data["titulo"].strip()
