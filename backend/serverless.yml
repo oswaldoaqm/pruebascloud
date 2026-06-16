@@ -32,6 +32,7 @@ provider:
     PRODUCTS_TABLE: t_productos-${sls:stage}
     ORDERS_TABLE: t_pedidos-${sls:stage}
     WORKFLOW_TABLE: t_workflow-${sls:stage}
+    SEDES_TABLE: t_sedes-${sls:stage}
     IMAGES_BUCKET: pj-grupo2-imagenes-${aws:accountId}
     EVENT_BUS: pedidos-bus
     STATE_MACHINE_ARN: arn:aws:states:${aws:region}:${aws:accountId}:stateMachine:pedido-workflow-${sls:stage}
@@ -60,6 +61,22 @@ functions:
   seedUsuarios:
     handler: usuarios.seed_usuarios
     timeout: 30
+  listarUsuarios:
+    handler: usuarios.listar_usuarios
+    events:
+      - httpApi: { path: /usuarios, method: get, authorizer: { name: jwtAuth } }
+  crearUsuario:
+    handler: usuarios.crear_usuario
+    events:
+      - httpApi: { path: /usuarios, method: post, authorizer: { name: jwtAuth } }
+  actualizarUsuario:
+    handler: usuarios.actualizar_usuario
+    events:
+      - httpApi: { path: '/usuarios/{email}', method: patch, authorizer: { name: jwtAuth } }
+  eliminarUsuario:
+    handler: usuarios.eliminar_usuario
+    events:
+      - httpApi: { path: '/usuarios/{email}', method: delete, authorizer: { name: jwtAuth } }
 
   # ── Dominio: productos ──
   listarProductos:
@@ -70,8 +87,37 @@ functions:
     handler: productos.crear
     events:
       - httpApi: { path: /productos, method: post, authorizer: { name: jwtAuth } }
+  actualizarProducto:
+    handler: productos.actualizar
+    events:
+      - httpApi: { path: '/productos/{product_id}', method: patch, authorizer: { name: jwtAuth } }
+  eliminarProducto:
+    handler: productos.eliminar
+    events:
+      - httpApi: { path: '/productos/{product_id}', method: delete, authorizer: { name: jwtAuth } }
   seedProductos:
     handler: productos.seed
+    timeout: 30
+
+  # ── Dominio: sedes (cadena) ──
+  listarSedes:
+    handler: sedes.listar
+    events:
+      - httpApi: { path: /sedes, method: get }
+  crearSede:
+    handler: sedes.crear
+    events:
+      - httpApi: { path: /sedes, method: post, authorizer: { name: jwtAuth } }
+  actualizarSede:
+    handler: sedes.actualizar
+    events:
+      - httpApi: { path: '/sedes/{id}', method: patch, authorizer: { name: jwtAuth } }
+  metricasSedes:
+    handler: sedes.metricas
+    events:
+      - httpApi: { path: /sedes/metricas, method: get, authorizer: { name: jwtAuth } }
+  seedSedes:
+    handler: sedes.seed
     timeout: 30
 
   # ── Dominio: pedidos ──
@@ -152,6 +198,18 @@ resources:
       Type: AWS::DynamoDB::Table
       Properties:
         TableName: t_usuarios-${sls:stage}
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - { AttributeName: PK, AttributeType: S }
+          - { AttributeName: SK, AttributeType: S }
+        KeySchema:
+          - { AttributeName: PK, KeyType: HASH }
+          - { AttributeName: SK, KeyType: RANGE }
+
+    SedesTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: t_sedes-${sls:stage}
         BillingMode: PAY_PER_REQUEST
         AttributeDefinitions:
           - { AttributeName: PK, AttributeType: S }

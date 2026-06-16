@@ -33,4 +33,14 @@ PRODUCTOS = [
      "descripcion": "Brownie de chocolate familiar", "image_key": "postres/brownie.jpg"},
 ]
 
-TENANTS = ["pj-miraflores", "pj-surco", "pj-san-isidro", "pj-la-molina"]
+# Sedes de la cadena (con metadatos). TENANTS se deriva para mantener compatibilidad.
+SEDES = [
+    {"id": "pj-miraflores", "nombre": "Papa Johns - Miraflores", "direccion": "Av. Larco 345, Miraflores"},
+    {"id": "pj-surco", "nombre": "Papa Johns - Surco", "direccion": "Av. Caminos del Inca 1803, Surco"},
+    {"id": "pj-san-isidro", "nombre": "Papa Johns - San Isidro", "direccion": "Av. Conquistadores 605, San Isidro"},
+    {"id": "pj-la-molina", "nombre": "Papa Johns - La Molina", "direccion": "Av. La Molina 1167, La Molina"},
+]
+TENANTS = [s["id"] for s in SEDES]
+
+# "Sede" central de la cadena: aquí vive el SUPERADMIN (no vende productos).
+CENTRAL = "pj-central"

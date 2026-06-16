@@ -72,6 +72,49 @@ def crear(event, context):
     return _response(201, {"message": "Producto creado", "product_id": data["id"], "tenant_id": tenant_id})
 
 
+def actualizar(event, context):
+    """PATCH /productos/{product_id} — editar producto de la sede (solo ADMIN)."""
+    ctx = event.get("requestContext", {}).get("authorizer", {}).get("lambda", {})
+    if ctx.get("role") != "ADMIN":
+        return _response(403, {"error": "Solo ADMIN puede editar productos"})
+
+    pid = (event.get("pathParameters") or {}).get("product_id", "")
+    try:
+        data = json.loads(event.get("body") or "{}")
+    except json.JSONDecodeError:
+        return _response(400, {"error": "Body JSON inválido"})
+
+    key = {"PK": f"TENANT#{ctx['tenant_id']}", "SK": f"PROD#{pid}"}
+    if "Item" not in tabla.get_item(Key=key):
+        return _response(404, {"error": "Producto no encontrado"})
+
+    sets, values = [], {}
+    for campo in ("nombre", "categoria", "descripcion"):
+        if campo in data:
+            sets.append(f"{campo} = :{campo}"); values[f":{campo}"] = str(data[campo])
+    if "precio" in data:
+        sets.append("precio = :precio"); values[":precio"] = Decimal(str(data["precio"]))
+    if "image_key" in data:
+        sets.append("image_url = :img"); values[":img"] = _img_url(data["image_key"])
+    if not sets:
+        return _response(400, {"error": "Nada que actualizar"})
+
+    tabla.update_item(Key=key, UpdateExpression="SET " + ", ".join(sets), ExpressionAttributeValues=values)
+    prod = tabla.get_item(Key=key)["Item"]
+    return _response(200, {"message": "Producto actualizado",
+                           "producto": {k: v for k, v in prod.items() if k not in ("PK", "SK")}})
+
+
+def eliminar(event, context):
+    """DELETE /productos/{product_id} — eliminar producto de la sede (solo ADMIN)."""
+    ctx = event.get("requestContext", {}).get("authorizer", {}).get("lambda", {})
+    if ctx.get("role") != "ADMIN":
+        return _response(403, {"error": "Solo ADMIN puede eliminar productos"})
+    pid = (event.get("pathParameters") or {}).get("product_id", "")
+    tabla.delete_item(Key={"PK": f"TENANT#{ctx['tenant_id']}", "SK": f"PROD#{pid}"})
+    return _response(200, {"message": "Producto eliminado", "product_id": pid})
+
+
 def seed(event, context):
     """Carga el catálogo Papa Johns en todos los tenants. Invocar manualmente:
     sls invoke -f seed

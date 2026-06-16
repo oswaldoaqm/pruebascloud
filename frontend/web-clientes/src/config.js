@@ -6,7 +6,9 @@ export const API_BASE = 'https://i9m3hyluue.execute-api.us-east-1.amazonaws.com'
 export const API_USUARIOS = API_BASE
 export const API_PRODUCTOS = API_BASE
 export const API_PEDIDOS = API_BASE
+export const API_SEDES = API_BASE
 
+// Respaldo del selector si GET /sedes falla (las sedes reales vienen del backend).
 export const TENANTS = [
   { id: 'pj-miraflores', nombre: 'Papa Johns - Miraflores' },
   { id: 'pj-surco', nombre: 'Papa Johns - Surco' },

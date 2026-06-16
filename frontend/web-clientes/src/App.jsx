@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { API_USUARIOS, API_PRODUCTOS, API_PEDIDOS, TENANTS } from './config.js'
+import { API_USUARIOS, API_PRODUCTOS, API_PEDIDOS, API_SEDES, TENANTS } from './config.js'
 
 const CATEGORIAS = [
   { id: 'todas', label: 'Todo' },
@@ -11,6 +11,7 @@ const CATEGORIAS = [
 const EMOJI = { pizzas: '🍕', complementos: '🧄', bebidas: '🥤', postres: '🍫' }
 
 export default function App() {
+  const [sedes, setSedes] = useState(TENANTS)            // respaldo; se reemplaza con backend
   const [tenant, setTenant] = useState(TENANTS[0].id)
   const [productos, setProductos] = useState([])
   const [categoria, setCategoria] = useState('todas')
@@ -41,6 +42,12 @@ export default function App() {
       setOrdenando(false)
     }
   }
+
+  useEffect(() => {
+    fetch(`${API_SEDES}/sedes`).then(r => r.json())
+      .then(d => { if (d.sedes?.length) setSedes(d.sedes.map(s => ({ id: s.id, nombre: s.nombre }))) })
+      .catch(() => {})
+  }, [])
 
   useEffect(() => {
     setCargando(true)
@@ -74,7 +81,7 @@ export default function App() {
       <header className="header">
         <div className="logo">Papa Johns<span> Pizza</span></div>
         <select value={tenant} onChange={e => setTenant(e.target.value)}>
-          {TENANTS.map(t => <option key={t.id} value={t.id}>{t.nombre}</option>)}
+          {sedes.map(t => <option key={t.id} value={t.id}>{t.nombre}</option>)}
         </select>
         <div className="header-actions">
           <button className="btn btn-white" onClick={() => setShowCart(true)}>

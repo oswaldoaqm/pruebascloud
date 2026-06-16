@@ -96,3 +96,16 @@ th { color: #777; font-size: 0.8rem; text-transform: uppercase; }
 .step-row .t { font-size: 0.8rem; color: #777; }
 .empty { text-align: center; padding: 32px; color: #999; }
 .section-title { margin: 18px 0 10px; color: var(--pj-green); }
+
+/* Panel admin */
+.titulo-badge { background: #ffd54f; color: #5d4037; border-radius: 12px; padding: 2px 10px; margin-left: 8px; font-size: 0.8rem; font-weight: 700; }
+.admin-nuevo { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; padding: 14px; background: #f0f7f3; border-radius: 10px; }
+.admin-nuevo input, .admin-nuevo select { padding: 8px 10px; border: 1px solid #ccc; border-radius: 8px; font-size: 0.9rem; }
+.admin-nuevo input { flex: 1; min-width: 120px; }
+.admin-msg { background: var(--pj-green); color: #fff; padding: 8px 14px; border-radius: 8px; margin-bottom: 12px; font-weight: 700; }
+.titulo-input { width: 100%; padding: 6px 8px; border: 1px solid #ddd; border-radius: 6px; font-size: 0.85rem; }
+td select { padding: 6px 8px; border: 1px solid #ddd; border-radius: 6px; font-weight: 700; color: var(--pj-green); }
+.btn-sm { padding: 4px 12px; font-size: 0.8rem; }
+.admin-hint { margin-top: 14px; font-size: 0.82rem; color: #888; }
+.prod-id { font-size: 0.72rem; color: #aaa; }
+.kpi .num { word-break: break-word; }

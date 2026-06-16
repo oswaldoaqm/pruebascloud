@@ -3,6 +3,7 @@ import os
 import uuid
 
 import boto3
+from boto3.dynamodb.conditions import Key
 
 import jwt_utils
 import seed_data
@@ -10,7 +11,17 @@ import seed_data
 dynamodb = boto3.resource("dynamodb")
 tabla = dynamodb.Table(os.environ["USERS_TABLE"])
 
-ROLES_VALIDOS = {"CLIENTE", "COCINERO", "DESPACHADOR", "REPARTIDOR", "ADMIN"}
+ROLES_VALIDOS = {"CLIENTE", "COCINERO", "DESPACHADOR", "REPARTIDOR", "ADMIN", "SUPERADMIN"}
+
+
+def _auth(event) -> dict:
+    return event.get("requestContext", {}).get("authorizer", {}).get("lambda", {})
+
+
+def _safe(user: dict) -> dict:
+    """Quita campos sensibles e internos antes de devolver un usuario."""
+    return {k: v for k, v in user.items()
+            if k not in ("PK", "SK", "salt", "password_hash")}
 
 
 def _response(status: int, body: dict) -> dict:
@@ -82,7 +93,8 @@ def login(event, context):
         "role": user["role"],
         "nombre": user["nombre"],
     })
-    return _response(200, {"token": token, "role": user["role"], "nombre": user["nombre"], "tenant_id": tenant_id})
+    return _response(200, {"token": token, "role": user["role"], "nombre": user["nombre"],
+                           "tenant_id": tenant_id, "titulo": user.get("titulo", "")})
 
 
 def me(event, context):
@@ -121,5 +133,125 @@ def seed_usuarios(event, context):
                     "password_hash": jwt_utils.hash_password("123456", salt),
                 })
                 count += 1
-    return {"message": f"Seed usuarios: {count} trabajadores en {len(seed_data.TENANTS)} sedes",
+        # SUPERADMIN de la cadena, en la sede central
+        salt = uuid.uuid4().hex
+        batch.put_item(Item={
+            "PK": f"TENANT#{seed_data.CENTRAL}",
+            "SK": "USER#superadmin@pj.com",
+            "tenant_id": seed_data.CENTRAL,
+            "email": "superadmin@pj.com",
+            "nombre": "Super Administrador",
+            "role": "SUPERADMIN",
+            "salt": salt,
+            "password_hash": jwt_utils.hash_password("123456", salt),
+        })
+        count += 1
+    return {"message": f"Seed usuarios: {count} cuentas ({len(seed_data.TENANTS)} sedes + central)",
             "password": "123456"}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Panel de administración (solo rol ADMIN). Gestiona el personal de la sede.
+# ─────────────────────────────────────────────────────────────────────────────
+
+def listar_usuarios(event, context):
+    """GET /usuarios — lista el personal de la sede (solo ADMIN)."""
+    ctx = _auth(event)
+    if ctx.get("role") != "ADMIN":
+        return _response(403, {"error": "Solo el administrador puede ver el personal"})
+
+    res = tabla.query(
+        KeyConditionExpression=Key("PK").eq(f"TENANT#{ctx['tenant_id']}") & Key("SK").begins_with("USER#")
+    )
+    usuarios = [_safe(u) for u in res.get("Items", [])]
+    usuarios.sort(key=lambda u: (u.get("role", ""), u.get("nombre", "")))
+    return _response(200, {"count": len(usuarios), "usuarios": usuarios})
+
+
+def crear_usuario(event, context):
+    """POST /usuarios — el ADMIN crea un trabajador en su sede."""
+    ctx = _auth(event)
+    if ctx.get("role") != "ADMIN":
+        return _response(403, {"error": "Solo el administrador puede crear trabajadores"})
+
+    try:
+        data = json.loads(event.get("body") or "{}")
+    except json.JSONDecodeError:
+        return _response(400, {"error": "Body JSON inválido"})
+
+    email = data.get("email", "").strip().lower()
+    nombre = data.get("nombre", "").strip()
+    role = data.get("role", "COCINERO").upper()
+    titulo = data.get("titulo", "").strip()
+    password = data.get("password", "123456")
+
+    if not email or not nombre:
+        return _response(400, {"error": "Faltan campos: email, nombre"})
+    if role not in ROLES_VALIDOS:
+        return _response(400, {"error": f"Role inválido. Usar: {sorted(ROLES_VALIDOS)}"})
+
+    tenant_id = ctx["tenant_id"]  # del token, nunca del body
+    salt = uuid.uuid4().hex
+    item = {
+        "PK": f"TENANT#{tenant_id}", "SK": f"USER#{email}",
+        "tenant_id": tenant_id, "email": email, "nombre": nombre,
+        "role": role, "titulo": titulo, "salt": salt,
+        "password_hash": jwt_utils.hash_password(password, salt),
+    }
+    try:
+        tabla.put_item(Item=item, ConditionExpression="attribute_not_exists(PK)")
+    except tabla.meta.client.exceptions.ConditionalCheckFailedException:
+        return _response(409, {"error": "Ya existe un usuario con ese email en la sede"})
+    return _response(201, {"message": "Trabajador creado", "usuario": _safe(item)})
+
+
+def actualizar_usuario(event, context):
+    """PATCH /usuarios/{email} — cambia rol y/o título (solo ADMIN)."""
+    ctx = _auth(event)
+    if ctx.get("role") != "ADMIN":
+        return _response(403, {"error": "Solo el administrador puede editar trabajadores"})
+
+    email = (event.get("pathParameters") or {}).get("email", "").lower()
+    try:
+        data = json.loads(event.get("body") or "{}")
+    except json.JSONDecodeError:
+        return _response(400, {"error": "Body JSON inválido"})
+
+    key = {"PK": f"TENANT#{ctx['tenant_id']}", "SK": f"USER#{email}"}
+    if "Item" not in tabla.get_item(Key=key):
+        return _response(404, {"error": "Trabajador no encontrado"})
+
+    # Protección anti-bloqueo: el admin no puede quitarse a sí mismo el rol ADMIN
+    if email == ctx.get("email") and "role" in data and data["role"].upper() != "ADMIN":
+        return _response(400, {"error": "No puedes quitarte tu propio rol de administrador"})
+
+    sets, names, values = [], {}, {}
+    if "role" in data:
+        role = data["role"].upper()
+        if role not in ROLES_VALIDOS:
+            return _response(400, {"error": f"Role inválido. Usar: {sorted(ROLES_VALIDOS)}"})
+        sets.append("#r = :r"); names["#r"] = "role"; values[":r"] = role
+    if "titulo" in data:
+        sets.append("titulo = :t"); values[":t"] = data["titulo"].strip()
+    if not sets:
+        return _response(400, {"error": "Nada que actualizar (enviar role y/o titulo)"})
+
+    tabla.update_item(Key=key, UpdateExpression="SET " + ", ".join(sets),
+                      ExpressionAttributeNames=names or None,
+                      ExpressionAttributeValues=values)
+    user = tabla.get_item(Key=key)["Item"]
+    return _response(200, {"message": "Trabajador actualizado", "usuario": _safe(user)})
+
+
+def eliminar_usuario(event, context):
+    """DELETE /usuarios/{email} — elimina un trabajador (solo ADMIN)."""
+    ctx = _auth(event)
+    if ctx.get("role") != "ADMIN":
+        return _response(403, {"error": "Solo el administrador puede eliminar trabajadores"})
+
+    email = (event.get("pathParameters") or {}).get("email", "").lower()
+    if email == ctx.get("email"):
+        return _response(400, {"error": "No puedes eliminar tu propia cuenta"})
+
+    tabla.delete_item(Key={"PK": f"TENANT#{ctx['tenant_id']}", "SK": f"USER#{email}"})
+    return _response(200, {"message": "Trabajador eliminado", "email": email})
