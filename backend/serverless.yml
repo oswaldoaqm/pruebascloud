@@ -86,7 +86,7 @@ functions:
   obtenerPedido:
     handler: pedidos.obtener
     events:
-      - httpApi: { path: /pedidos/{order_id}, method: get, authorizer: { name: jwtAuth } }
+      - httpApi: { path: '/pedidos/{order_id}', method: get, authorizer: { name: jwtAuth } }
   listarPedidos:
     handler: pedidos.listar
     events:
@@ -132,15 +132,15 @@ functions:
   tomarTarea:
     handler: tareas.tomar
     events:
-      - httpApi: { path: /tareas/{order_id}/{paso}/tomar, method: post, authorizer: { name: jwtAuth } }
+      - httpApi: { path: '/tareas/{order_id}/{paso}/tomar', method: post, authorizer: { name: jwtAuth } }
   completarTarea:
     handler: tareas.completar
     events:
-      - httpApi: { path: /tareas/{order_id}/{paso}/completar, method: post, authorizer: { name: jwtAuth } }
+      - httpApi: { path: '/tareas/{order_id}/{paso}/completar', method: post, authorizer: { name: jwtAuth } }
   timeline:
     handler: tareas.timeline
     events:
-      - httpApi: { path: /tareas/{order_id}, method: get, authorizer: { name: jwtAuth } }
+      - httpApi: { path: '/tareas/{order_id}', method: get, authorizer: { name: jwtAuth } }
   dashboard:
     handler: tareas.dashboard
     events:
