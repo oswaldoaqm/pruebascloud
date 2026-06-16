@@ -122,7 +122,8 @@ def metricas(event, context):
             por_estado[p["status"]] = por_estado.get(p["status"], 0) + 1
 
         salida.append({
-            "id": tid, "nombre": s.get("nombre", tid), "activa": s.get("activa", True),
+            "id": tid, "nombre": s.get("nombre", tid), "direccion": s.get("direccion", ""),
+            "activa": s.get("activa", True),
             "trabajadores": len(trabajadores), "pedidos": len(pedidos),
             "entregados": entregados, "ingresos": ingresos, "pedidos_por_estado": por_estado,
         })

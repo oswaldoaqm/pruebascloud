@@ -450,15 +450,15 @@ function RolesRef() {
 
 function SuperAdmin({ sesion }) {
   const [data, setData] = useState(null)
-  const [sedes, setSedes] = useState([])
   const [msg, setMsg] = useState('')
   const [nueva, setNueva] = useState({ id: '', nombre: '', direccion: '' })
   const auth = { 'Content-Type': 'application/json', Authorization: `Bearer ${sesion.token}` }
   const flash = (t) => { setMsg(t); setTimeout(() => setMsg(''), 3000) }
+  // La gestión usa data.sedes (métricas), que incluye TODAS las sedes (activas e inactivas)
+  const sedes = data?.sedes || []
 
   const cargar = () => {
     fetch(`${API_SEDES}/sedes/metricas`, { headers: auth }).then(r => r.json()).then(setData).catch(() => {})
-    fetch(`${API_SEDES}/sedes`).then(r => r.json()).then(d => setSedes(d.sedes || [])).catch(() => {})
   }
   useEffect(() => { cargar(); const t = setInterval(cargar, 12000); return () => clearInterval(t) }, [])
 
