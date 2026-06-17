@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, useCallback } from 'react'
 import {
   ShoppingCart, User, LogOut, Plus, Minus, X, Moon, Sun, MapPin,
-  ClipboardList, Check, Pizza, PartyPopper,
+  ClipboardList, Check, Pizza, PartyPopper, ChevronDown,
 } from 'lucide-react'
 import { API_USUARIOS, API_PRODUCTOS, API_PEDIDOS, API_SEDES, TENANTS } from './config.js'
 
@@ -103,12 +103,7 @@ export default function App() {
     <div>
       <header className="header">
         <div className="logo"><Pizza size={24} />Papa Johns<span className="dot">.</span></div>
-        <div className="sede-select">
-          <MapPin size={16} />
-          <select value={tenant} onChange={e => setTenant(e.target.value)}>
-            {sedes.map(t => <option key={t.id} value={t.id}>{t.nombre}</option>)}
-          </select>
-        </div>
+        <SedePicker sedes={sedes} value={tenant} onChange={setTenant} />
         <div className="spacer" />
         <button className="icon-btn" onClick={() => setTheme(t => t === 'light' ? 'dark' : 'light')} title="Tema">
           {theme === 'light' ? <Moon size={20} /> : <Sun size={20} />}
@@ -202,6 +197,31 @@ export default function App() {
       {showLogin && <LoginModal tenant={tenant} onClose={() => setShowLogin(false)} toast={toast}
         onLogin={s => { localStorage.setItem('sesion', JSON.stringify(s)); setSesion(s); setShowLogin(false); toast(`Hola, ${s.nombre.split(' ')[0]}`) }} />}
       {toastView}
+    </div>
+  )
+}
+
+function SedePicker({ sedes, value, onChange }) {
+  const [open, setOpen] = useState(false)
+  const actual = sedes.find(s => s.id === value)
+  return (
+    <div className="picker">
+      <button className="picker-btn" onClick={() => setOpen(o => !o)}>
+        <MapPin size={16} />
+        <span>{actual?.nombre || 'Elegir sede'}</span>
+        <ChevronDown size={15} />
+      </button>
+      {open && <>
+        <div className="picker-back" onClick={() => setOpen(false)} />
+        <div className="picker-menu">
+          {sedes.map(s => (
+            <button key={s.id} className={`picker-item ${s.id === value ? 'active' : ''}`}
+                    onClick={() => { onChange(s.id); setOpen(false) }}>
+              <MapPin size={14} /> {s.nombre}
+            </button>
+          ))}
+        </div>
+      </>}
     </div>
   )
 }

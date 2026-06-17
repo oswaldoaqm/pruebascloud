@@ -111,6 +111,7 @@ td select { color: var(--pj-green); }
 .admin-nuevo input, .admin-nuevo select { padding: 9px 11px; border: 1px solid var(--border); border-radius: 8px; font-size: .88rem; background: var(--surface); color: var(--text); font-family: inherit; }
 .admin-nuevo input { flex: 1; min-width: 110px; }
 .admin-hint { margin-top: 14px; font-size: .82rem; color: var(--text-soft); }
+.filtros { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 14px; }
 
 /* ============ MODAL / CONFIRM / TOAST ============ */
 .overlay { position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 40; animation: fade .2s; }

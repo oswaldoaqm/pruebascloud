@@ -376,14 +376,20 @@ function KPI({ icon: Icon, color, label, value }) {
 
 function Admin({ sesion, ask, toast }) {
   const [usuarios, setUsuarios] = useState([]); const [cargando, setCargando] = useState(true)
+  const [q, setQ] = useState(''); const [rolF, setRolF] = useState('TODOS')
   const [nuevo, setNuevo] = useState({ nombre: '', email: '', role: 'COCINERO', titulo: '', password: '123456' })
   const auth = { 'Content-Type': 'application/json', Authorization: `Bearer ${sesion.token}` }
   const cargar = () => { setCargando(true); fetch(`${API_USUARIOS}/usuarios`, { headers: auth }).then(r => r.json()).then(d => setUsuarios(d.usuarios || [])).catch(() => {}).finally(() => setCargando(false)) }
   useEffect(() => { cargar() }, [])
   const actualizar = async (email, campos) => { const r = await fetch(`${API_USUARIOS}/usuarios/${encodeURIComponent(email)}`, { method: 'PATCH', headers: auth, body: JSON.stringify(campos) }); const d = await r.json(); if (!r.ok) return toast('⚠️ ' + (d.error || 'Error')); toast('Actualizado', <Check size={16} />); cargar() }
+  const cambiarRol = async (email, role) => { if (role === 'CLIENTE' && !await ask(`¿Quitar a ${email} del personal? Volverá a ser CLIENTE.`)) return; actualizar(email, { role }) }
   const eliminar = async (email) => { if (!await ask(`¿Eliminar a ${email}?`)) return; const r = await fetch(`${API_USUARIOS}/usuarios/${encodeURIComponent(email)}`, { method: 'DELETE', headers: auth }); const d = await r.json(); if (!r.ok) return toast('⚠️ ' + (d.error || 'Error')); toast('Eliminado'); cargar() }
   const crear = async () => { if (!nuevo.nombre || !nuevo.email) return toast('⚠️ Nombre y email requeridos'); const r = await fetch(`${API_USUARIOS}/usuarios`, { method: 'POST', headers: auth, body: JSON.stringify(nuevo) }); const d = await r.json(); if (!r.ok) return toast('⚠️ ' + (d.error || 'Error')); toast('Trabajador creado', <Check size={16} />); setNuevo({ nombre: '', email: '', role: 'COCINERO', titulo: '', password: '123456' }); cargar() }
   const ROLES_STAFF = ['COCINERO', 'DESPACHADOR', 'REPARTIDOR', 'ADMIN']
+  const t = q.trim().toLowerCase()
+  const visibles = usuarios.filter(u =>
+    (rolF === 'TODOS' || u.role === rolF) &&
+    (!t || (u.nombre || '').toLowerCase().includes(t) || (u.email || '').toLowerCase().includes(t) || (u.titulo || '').toLowerCase().includes(t)))
   return (
     <div>
       <h1 className="page-title">Gestión de personal</h1>
@@ -392,21 +398,34 @@ function Admin({ sesion, ask, toast }) {
         <input placeholder="Nombre" value={nuevo.nombre} onChange={e => setNuevo({ ...nuevo, nombre: e.target.value })} />
         <input placeholder="Email" value={nuevo.email} onChange={e => setNuevo({ ...nuevo, email: e.target.value })} />
         <select value={nuevo.role} onChange={e => setNuevo({ ...nuevo, role: e.target.value })}>{ROLES_STAFF.map(r => <option key={r} value={r}>{r}</option>)}</select>
-        <input placeholder="Título (opcional)" list="titulos" value={nuevo.titulo} onChange={e => setNuevo({ ...nuevo, titulo: e.target.value })} />
+        <select value={nuevo.titulo} onChange={e => setNuevo({ ...nuevo, titulo: e.target.value })}>
+          <option value="">Sin título</option>
+          {TITULOS_SUGERIDOS.map(t => <option key={t} value={t}>{t}</option>)}
+        </select>
         <button className="btn btn-green" onClick={crear}><Plus size={16} />Crear</button>
       </div>
-      <datalist id="titulos">{TITULOS_SUGERIDOS.map(t => <option key={t} value={t} />)}</datalist>
-      {cargando ? <div className="empty">Cargando…</div> : (
+      <div className="filtros">
+        <input className="field" style={{ maxWidth: 280, margin: 0 }} placeholder="🔎 Buscar por nombre, email o título…" value={q} onChange={e => setQ(e.target.value)} />
+        <select className="field" style={{ maxWidth: 180, margin: 0 }} value={rolF} onChange={e => setRolF(e.target.value)}>
+          <option value="TODOS">Todos los roles</option>
+          {ROLES_STAFF.map(r => <option key={r} value={r}>{r}</option>)}
+        </select>
+        <span className="page-sub" style={{ margin: 0 }}>{visibles.length} de {usuarios.length}</span>
+      </div>
+      {cargando ? <div className="empty">Cargando…</div> : visibles.length === 0 ? <div className="empty">Sin resultados.</div> : (
         <table>
           <thead><tr><th>Nombre</th><th>Email</th><th>Rol</th><th>Título</th><th></th></tr></thead>
-          <tbody>{usuarios.map(u => (
+          <tbody>{visibles.map(u => (
             <tr key={u.email}>
               <td><b>{u.nombre}</b></td><td>{u.email}</td>
-              <td><select value={u.role} onChange={e => actualizar(u.email, { role: e.target.value })}>
+              <td><select value={u.role} onChange={e => cambiarRol(u.email, e.target.value)}>
                 {ROLES_STAFF.map(r => <option key={r} value={r}>{r}</option>)}
                 <option value="CLIENTE">CLIENTE (quitar de staff)</option>
               </select></td>
-              <td><input className="inline-input" list="titulos" defaultValue={u.titulo || ''} placeholder="— sin título —" onBlur={e => { if (e.target.value !== (u.titulo || '')) actualizar(u.email, { titulo: e.target.value }) }} /></td>
+              <td><select className="inline-input" value={u.titulo || ''} onChange={e => actualizar(u.email, { titulo: e.target.value })}>
+                <option value="">— sin título —</option>
+                {[...new Set([...(u.titulo ? [u.titulo] : []), ...TITULOS_SUGERIDOS])].map(t => <option key={t} value={t}>{t}</option>)}
+              </select></td>
               <td><button className="btn btn-red btn-sm" onClick={() => eliminar(u.email)}>Eliminar</button></td>
             </tr>
           ))}</tbody>
