@@ -1,60 +1,36 @@
 #!/bin/bash
-# Smoke test end-to-end: crea usuarios demo (si no existen), un pedido,
-# recorre todo el workflow y verifica que termine en DELIVERED.
-# Uso: bash scripts/smoke-test.sh
+# E2E (camino feliz): crea un pedido WEB y lo lleva por todo el workflow hasta DELIVERED.
+# Uso: bash scripts/smoke-test.sh   (requiere seedUsuarios y seedProductos)
 set -u
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$DIR/config.sh"; source "$DIR/lib.sh"
 
-# Backend consolidado: UNA sola API Gateway para todo. Reemplazar tras el deploy.
-BASE=https://i9m3hyluue.execute-api.us-east-1.amazonaws.com
-URL_USU=$BASE
-URL_PED=$BASE
-URL_WF=$BASE
-TENANT=pj-miraflores
-PASS=123456
+hdr "E2E — pedido WEB de punta a punta"
 
-red() { echo -e "\033[31m$1\033[0m"; }
-green() { echo -e "\033[32m$1\033[0m"; }
-
-login() {
-  curl -s -X POST $URL_USU/auth/login -H "Content-Type: application/json" \
-    -d "{\"tenant_id\":\"$TENANT\",\"email\":\"$1\",\"password\":\"$PASS\"}" \
-    | python3 -c "import sys,json;print(json.load(sys.stdin).get('token',''))"
-}
-
-paso() { # order_id paso token
-  curl -s -X POST $URL_WF/tareas/$1/$2/tomar -H "Authorization: Bearer $3" > /dev/null
-  sleep 1
-  curl -s -X POST $URL_WF/tareas/$1/$2/completar -H "Authorization: Bearer $3" > /dev/null
-  sleep 3  # dar tiempo a SFN de escribir el siguiente task token
-  echo "  ✓ $2"
-}
-
-echo "== 1. Login de trabajadores (creados por seedUsuarios) =="
 TK_COC=$(login cocinero@pj.com); TK_DES=$(login despachador@pj.com); TK_REP=$(login repartidor@pj.com)
-[ -z "$TK_COC" ] && { red "FALLO: login (¿corriste 'sls invoke -f seedUsuarios'?)"; exit 1; }
-green "  ✓ logins OK"
+[ -n "$TK_COC" ] && [ -n "$TK_DES" ] && [ -n "$TK_REP" ] && ok "Login de los 3 roles" \
+  || { bad "Login falló (¿seedUsuarios?)"; summary; exit 1; }
 
-echo "== 2. Crear pedido =="
-OID=$(curl -s -X POST $URL_PED/pedidos -H "Authorization: Bearer $TK_COC" -H "Content-Type: application/json" \
-  -d '{"items":[{"product_id":"pz-pepperoni","nombre":"Pepperoni","precio":39.90,"cant":1}]}' \
-  | python3 -c "import sys,json;print(json.load(sys.stdin).get('order_id',''))")
-[ -z "$OID" ] && { red "FALLO: crear pedido"; exit 1; }
-green "  ✓ pedido $OID"
+OID=$(curl -s -X POST "$BASE/pedidos" -H "Authorization: Bearer $TK_COC" -H "Content-Type: application/json" \
+  -d '{"items":[{"product_id":"pz-pepperoni","cant":1}]}' | jget order_id)
+[ -n "$OID" ] && ok "Pedido creado: #$OID" || { bad "No se pudo crear el pedido"; summary; exit 1; }
 sleep 5  # EventBridge → start_workflow → primer task token
 
-echo "== 3. Workflow completo =="
-paso $OID COCINAR "$TK_COC"
-paso $OID EMPACAR "$TK_DES"
-paso $OID REPARTIR "$TK_REP"
-paso $OID ENTREGAR "$TK_REP"
+paso() { # order_id paso token
+  curl -s -X POST "$BASE/tareas/$1/$2/tomar" -H "Authorization: Bearer $3" >/dev/null
+  sleep 1
+  local r; r=$(curl -s -X POST "$BASE/tareas/$1/$2/completar" -H "Authorization: Bearer $3" | jget message)
+  sleep 3
+  [ -n "$r" ] && ok "Paso $2 completado" || bad "Paso $2 no se completó"
+}
+paso "$OID" COCINAR  "$TK_COC"
+paso "$OID" EMPACAR  "$TK_DES"
+paso "$OID" REPARTIR "$TK_REP"
+paso "$OID" ENTREGAR "$TK_REP"
 sleep 3
 
-echo "== 4. Verificación =="
-STATUS=$(curl -s $URL_PED/pedidos/$OID -H "Authorization: Bearer $TK_COC" \
-  | python3 -c "import sys,json;print(json.load(sys.stdin).get('status',''))")
-if [ "$STATUS" = "DELIVERED" ]; then
-  green "PASS ✅  Pedido $OID terminó en DELIVERED. Sistema operativo de punta a punta."
-else
-  red "FAIL ❌  Pedido $OID quedó en '$STATUS'. Revisa la ejecución en Step Functions."
-  exit 1
-fi
+STATUS=$(curl -s "$BASE/pedidos/$OID" -H "Authorization: Bearer $TK_COC" | jget status)
+[ "$STATUS" = "DELIVERED" ] && ok "Pedido #$OID en DELIVERED (EDA + Step Functions OK)" \
+  || bad "Pedido #$OID quedó en '$STATUS' (revisa Step Functions)"
+
+summary
