@@ -107,23 +107,35 @@ def me(event, context):
                            "role": ctx.get("role"), "nombre": ctx.get("nombre")})
 
 
-# Trabajadores demo creados en CADA sede (las 4). Password: 123456
+# Plantilla de personal creada en CADA sede (las 4). Password: 123456
+# (email, nombre, role, titulo). Los emails genéricos (admin@/cocinero@/...) son
+# las cuentas de demo; el resto da volumen realista a cada sede.
 WORKERS_DEMO = [
-    ("admin@pj.com", "Administrador", "ADMIN"),
-    ("cocinero@pj.com", "Mario", "COCINERO"),
-    ("despachador@pj.com", "Lucia", "DESPACHADOR"),
-    ("repartidor@pj.com", "Pedro", "REPARTIDOR"),
+    ("admin@pj.com", "Administrador", "ADMIN", ""),
+    # Cocina
+    ("cocinero@pj.com", "Mario Quispe", "COCINERO", "Jefe de cocina"),
+    ("rosa@pj.com", "Rosa Huamán", "COCINERO", "Empleado del mes"),
+    ("carlos@pj.com", "Carlos Ramos", "COCINERO", ""),
+    ("diego@pj.com", "Diego Flores", "COCINERO", ""),
+    # Despacho
+    ("despachador@pj.com", "Lucía Torres", "DESPACHADOR", "Despachador veloz"),
+    ("ana@pj.com", "Ana Castillo", "DESPACHADOR", ""),
+    ("jorge@pj.com", "Jorge Mendoza", "DESPACHADOR", ""),
+    # Reparto
+    ("repartidor@pj.com", "Pedro Ríos", "REPARTIDOR", "Repartidor estrella"),
+    ("miguel@pj.com", "Miguel Vargas", "REPARTIDOR", ""),
+    ("sofia@pj.com", "Sofía Díaz", "REPARTIDOR", ""),
 ]
 
 
 def seed_usuarios(event, context):
-    """Crea los trabajadores demo (incl. ADMIN) en las 4 sedes. Reproducible:
+    """Crea el personal demo (incl. ADMIN) en las 4 sedes. Reproducible:
     sls invoke -f seedUsuarios
     """
     count = 0
     with tabla.batch_writer() as batch:
         for tenant_id in seed_data.TENANTS:
-            for email, nombre, role in WORKERS_DEMO:
+            for email, nombre, role, titulo in WORKERS_DEMO:
                 salt = uuid.uuid4().hex
                 batch.put_item(Item={
                     "PK": f"TENANT#{tenant_id}",
@@ -132,6 +144,7 @@ def seed_usuarios(event, context):
                     "email": email,
                     "nombre": nombre,
                     "role": role,
+                    "titulo": titulo,
                     "salt": salt,
                     "password_hash": jwt_utils.hash_password("123456", salt),
                 })

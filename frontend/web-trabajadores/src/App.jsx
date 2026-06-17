@@ -384,7 +384,7 @@ function Admin({ sesion, ask, toast }) {
   const actualizar = async (email, campos) => { const r = await fetch(`${API_USUARIOS}/usuarios/${encodeURIComponent(email)}`, { method: 'PATCH', headers: auth, body: JSON.stringify(campos) }); const d = await r.json(); if (!r.ok) return toast('⚠️ ' + (d.error || 'Error')); toast('Actualizado', <Check size={16} />); cargar() }
   const cambiarRol = async (email, role) => { if (role === 'CLIENTE' && !await ask(`¿Quitar a ${email} del personal? Volverá a ser CLIENTE.`)) return; actualizar(email, { role }) }
   const eliminar = async (email) => { if (!await ask(`¿Eliminar a ${email}?`)) return; const r = await fetch(`${API_USUARIOS}/usuarios/${encodeURIComponent(email)}`, { method: 'DELETE', headers: auth }); const d = await r.json(); if (!r.ok) return toast('⚠️ ' + (d.error || 'Error')); toast('Eliminado'); cargar() }
-  const crear = async () => { if (!nuevo.nombre || !nuevo.email) return toast('⚠️ Nombre y email requeridos'); const r = await fetch(`${API_USUARIOS}/usuarios`, { method: 'POST', headers: auth, body: JSON.stringify(nuevo) }); const d = await r.json(); if (!r.ok) return toast('⚠️ ' + (d.error || 'Error')); toast('Trabajador creado', <Check size={16} />); setNuevo({ nombre: '', email: '', role: 'COCINERO', titulo: '', password: '123456' }); cargar() }
+  const crear = async () => { if (!nuevo.nombre || !nuevo.email) return toast('⚠️ Nombre y email requeridos'); const body = { ...nuevo, password: nuevo.password || '123456' }; const r = await fetch(`${API_USUARIOS}/usuarios`, { method: 'POST', headers: auth, body: JSON.stringify(body) }); const d = await r.json(); if (!r.ok) return toast('⚠️ ' + (d.error || 'Error')); toast(`Trabajador creado (contraseña: ${body.password})`, <Check size={16} />); setNuevo({ nombre: '', email: '', role: 'COCINERO', titulo: '', password: '123456' }); cargar() }
   const ROLES_STAFF = ['COCINERO', 'DESPACHADOR', 'REPARTIDOR', 'ADMIN']
   const t = q.trim().toLowerCase()
   const visibles = usuarios.filter(u =>
@@ -402,6 +402,7 @@ function Admin({ sesion, ask, toast }) {
           <option value="">Sin título</option>
           {TITULOS_SUGERIDOS.map(t => <option key={t} value={t}>{t}</option>)}
         </select>
+        <input placeholder="Contraseña (def. 123456)" value={nuevo.password} onChange={e => setNuevo({ ...nuevo, password: e.target.value })} />
         <button className="btn btn-green" onClick={crear}><Plus size={16} />Crear</button>
       </div>
       <div className="filtros">
@@ -431,7 +432,7 @@ function Admin({ sesion, ask, toast }) {
           ))}</tbody>
         </table>
       )}
-      <p className="admin-hint">El rol define qué tareas atiende cada trabajador. Cambiar un trabajador a CLIENTE lo quita del personal. El título es un reconocimiento visible en su panel.</p>
+      <p className="admin-hint">El trabajador inicia sesión con el <b>email</b> que registras aquí y la <b>contraseña</b> indicada (por defecto <b>123456</b>), eligiendo esta misma sede. El rol define qué tareas atiende; cambiarlo a CLIENTE lo quita del personal. El título es un reconocimiento visible en su panel.</p>
     </div>
   )
 }
