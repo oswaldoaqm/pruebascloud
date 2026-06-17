@@ -116,7 +116,7 @@ td select { color: var(--pj-green); }
 .overlay { position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 40; animation: fade .2s; }
 @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
 .modal-center { position: fixed; inset: 0; display: grid; place-items: center; z-index: 50; padding: 16px; }
-.modal { background: var(--surface); border-radius: var(--radius); padding: 24px; width: 480px; max-width: 94vw; max-height: 85vh; overflow-y: auto; box-shadow: var(--shadow-lg); position: relative; animation: rise .25s; }
+.modal { background: var(--surface); border-radius: var(--radius); padding: 24px; width: 480px; max-width: 94vw; max-height: 85vh; overflow-y: auto; box-shadow: var(--shadow-lg); position: relative; z-index: 51; animation: rise .25s; }
 .modal h2 { margin-bottom: 14px; }
 .modal .close { position: absolute; top: 14px; right: 14px; }
 .confirm { width: 360px; text-align: center; }

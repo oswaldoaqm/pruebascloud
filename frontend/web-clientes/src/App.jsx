@@ -217,19 +217,24 @@ function Tracker({ sesion, orderId, onClose }) {
     load(); const t = setInterval(load, 5000); return () => clearInterval(t)
   }, [orderId])
   const idx = FLOW.indexOf(status)
+  const entregado = status === 'DELIVERED'
   return (
     <div className="modal-center"><div className="overlay" onClick={onClose} />
       <div className="modal">
         <button className="icon-btn close" onClick={onClose}><X size={18} /></button>
         <h2>Pedido #{orderId}</h2>
         <div className="track">
-          {FLOW.map((s, i) => (
-            <div key={s} className={`track-step ${i < idx ? 'done' : i === idx ? 'current' : ''}`}>
-              <span className={`rail ${i < idx ? 'filled' : ''}`} />
-              <span className="dot">{i < idx ? <Check size={16} /> : i === idx ? '●' : i + 1}</span>
-              <span className="lbl">{FLOW_LABEL[s]}</span>
-            </div>
-          ))}
+          {FLOW.map((s, i) => {
+            const done = i < idx || entregado
+            const current = i === idx && !entregado
+            return (
+              <div key={s} className={`track-step ${done ? 'done' : current ? 'current' : ''}`}>
+                <span className={`rail ${done ? 'filled' : ''}`} />
+                <span className="dot">{done ? <Check size={16} /> : current ? '●' : i + 1}</span>
+                <span className="lbl">{FLOW_LABEL[s]}</span>
+              </div>
+            )
+          })}
         </div>
         <p className="track-done-msg">
           {status === 'DELIVERED' ? <><PartyPopper size={18} style={{ verticalAlign: 'middle' }} /> ¡Buen provecho!</>

@@ -13,7 +13,7 @@ import {
 } from './config.js'
 
 const fmt = (iso) => iso ? new Date(iso).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' }) : '—'
-const hace = (iso) => { if (!iso) return ''; const s = (Date.now() - new Date(iso)) / 1000; if (s < 60) return 'hace ' + Math.floor(s) + 's'; if (s < 3600) return 'hace ' + Math.floor(s / 60) + ' min'; return 'hace ' + Math.floor(s / 3600) + ' h' }
+const hace = (iso) => { if (!iso) return ''; const s = (Date.now() - new Date(iso)) / 1000; if (s < 45) return 'hace un momento'; if (s < 3600) return 'hace ' + Math.floor(s / 60) + ' min'; return 'hace ' + Math.floor(s / 3600) + ' h' }
 const soles = (n) => 'S/ ' + Number(n || 0).toFixed(2)
 const CHART = ['#1aa86b', '#e8730a', '#8a3ffc', '#1f6feb', '#e01a22', '#f5b800']
 const STATUS_COLOR = { RECEIVED: '#8a8a8a', COOKING: '#e8730a', PACKING: '#8a3ffc', DELIVERING: '#1f6feb', DELIVERED: '#1aa86b', FAILED: '#e01a22' }
@@ -383,15 +383,15 @@ function Admin({ sesion, ask, toast }) {
   const actualizar = async (email, campos) => { const r = await fetch(`${API_USUARIOS}/usuarios/${encodeURIComponent(email)}`, { method: 'PATCH', headers: auth, body: JSON.stringify(campos) }); const d = await r.json(); if (!r.ok) return toast('⚠️ ' + (d.error || 'Error')); toast('Actualizado', <Check size={16} />); cargar() }
   const eliminar = async (email) => { if (!await ask(`¿Eliminar a ${email}?`)) return; const r = await fetch(`${API_USUARIOS}/usuarios/${encodeURIComponent(email)}`, { method: 'DELETE', headers: auth }); const d = await r.json(); if (!r.ok) return toast('⚠️ ' + (d.error || 'Error')); toast('Eliminado'); cargar() }
   const crear = async () => { if (!nuevo.nombre || !nuevo.email) return toast('⚠️ Nombre y email requeridos'); const r = await fetch(`${API_USUARIOS}/usuarios`, { method: 'POST', headers: auth, body: JSON.stringify(nuevo) }); const d = await r.json(); if (!r.ok) return toast('⚠️ ' + (d.error || 'Error')); toast('Trabajador creado', <Check size={16} />); setNuevo({ nombre: '', email: '', role: 'COCINERO', titulo: '', password: '123456' }); cargar() }
-  const asignables = ROLES.filter(r => r !== 'CLIENTE')
+  const ROLES_STAFF = ['COCINERO', 'DESPACHADOR', 'REPARTIDOR', 'ADMIN']
   return (
     <div>
       <h1 className="page-title">Gestión de personal</h1>
-      <p className="page-sub">{sesion.tenant_id}</p>
+      <p className="page-sub">{sesion.tenant_id} · solo se muestra el personal (los clientes no aparecen aquí)</p>
       <div className="admin-nuevo">
         <input placeholder="Nombre" value={nuevo.nombre} onChange={e => setNuevo({ ...nuevo, nombre: e.target.value })} />
         <input placeholder="Email" value={nuevo.email} onChange={e => setNuevo({ ...nuevo, email: e.target.value })} />
-        <select value={nuevo.role} onChange={e => setNuevo({ ...nuevo, role: e.target.value })}>{asignables.map(r => <option key={r} value={r}>{r}</option>)}</select>
+        <select value={nuevo.role} onChange={e => setNuevo({ ...nuevo, role: e.target.value })}>{ROLES_STAFF.map(r => <option key={r} value={r}>{r}</option>)}</select>
         <input placeholder="Título (opcional)" list="titulos" value={nuevo.titulo} onChange={e => setNuevo({ ...nuevo, titulo: e.target.value })} />
         <button className="btn btn-green" onClick={crear}><Plus size={16} />Crear</button>
       </div>
@@ -402,14 +402,17 @@ function Admin({ sesion, ask, toast }) {
           <tbody>{usuarios.map(u => (
             <tr key={u.email}>
               <td><b>{u.nombre}</b></td><td>{u.email}</td>
-              <td><select value={asignables.includes(u.role) ? u.role : u.role} onChange={e => actualizar(u.email, { role: e.target.value })}>{asignables.concat(asignables.includes(u.role) ? [] : [u.role]).map(r => <option key={r} value={r}>{r}</option>)}</select></td>
+              <td><select value={u.role} onChange={e => actualizar(u.email, { role: e.target.value })}>
+                {ROLES_STAFF.map(r => <option key={r} value={r}>{r}</option>)}
+                <option value="CLIENTE">CLIENTE (quitar de staff)</option>
+              </select></td>
               <td><input className="inline-input" list="titulos" defaultValue={u.titulo || ''} placeholder="— sin título —" onBlur={e => { if (e.target.value !== (u.titulo || '')) actualizar(u.email, { titulo: e.target.value }) }} /></td>
               <td><button className="btn btn-red btn-sm" onClick={() => eliminar(u.email)}>Eliminar</button></td>
             </tr>
           ))}</tbody>
         </table>
       )}
-      <p className="admin-hint">El rol define qué tareas atiende cada trabajador. El título es un reconocimiento visible en su panel. Cambios al instante.</p>
+      <p className="admin-hint">El rol define qué tareas atiende cada trabajador. Cambiar un trabajador a CLIENTE lo quita del personal. El título es un reconocimiento visible en su panel.</p>
     </div>
   )
 }

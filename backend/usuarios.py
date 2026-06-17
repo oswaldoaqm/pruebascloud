@@ -166,7 +166,8 @@ def listar_usuarios(event, context):
     res = tabla.query(
         KeyConditionExpression=Key("PK").eq(f"TENANT#{ctx['tenant_id']}") & Key("SK").begins_with("USER#")
     )
-    usuarios = [_safe(u) for u in res.get("Items", [])]
+    # Solo personal (staff): los CLIENTE no se gestionan desde este panel.
+    usuarios = [_safe(u) for u in res.get("Items", []) if u.get("role") != "CLIENTE"]
     usuarios.sort(key=lambda u: (u.get("role", ""), u.get("nombre", "")))
     return _response(200, {"count": len(usuarios), "usuarios": usuarios})
 
@@ -239,9 +240,10 @@ def actualizar_usuario(event, context):
     if not sets:
         return _response(400, {"error": "Nada que actualizar (enviar role y/o titulo)"})
 
-    tabla.update_item(Key=key, UpdateExpression="SET " + ", ".join(sets),
-                      ExpressionAttributeNames=names or None,
-                      ExpressionAttributeValues=values)
+    kwargs = {"Key": key, "UpdateExpression": "SET " + ", ".join(sets), "ExpressionAttributeValues": values}
+    if names:  # solo cuando hay nombres reservados (ej. 'role'); pasar None rompe boto3
+        kwargs["ExpressionAttributeNames"] = names
+    tabla.update_item(**kwargs)
     user = tabla.get_item(Key=key)["Item"]
     return _response(200, {"message": "Trabajador actualizado", "usuario": _safe(user)})
 
