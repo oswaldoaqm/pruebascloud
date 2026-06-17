@@ -89,6 +89,11 @@ def asignar_tarea(event, context):
     paso = event["paso"]
     now = _now()
 
+    # Resumen de productos del pedido, para que el trabajador sepa QUÉ preparar.
+    pedido = orders_tbl.get_item(Key={"PK": f"TENANT#{tenant_id}", "SK": f"ORDER#{order_id}"}).get("Item", {})
+    items_resumen = ", ".join(f"{int(it.get('cant', 1))}x {it.get('nombre', '?')}" for it in pedido.get("items", [])) or "—"
+    cliente = (pedido.get("cliente") or {}).get("nombre", "")
+
     tabla.put_item(Item={
         "PK": f"TENANT#{tenant_id}#ORDER#{order_id}",
         "SK": f"STEP#{paso}",
@@ -103,6 +108,8 @@ def asignar_tarea(event, context):
         "status": "PENDING",
         "task_token": event["task_token"],
         "started_at": now,
+        "items_resumen": items_resumen,
+        "cliente": cliente,
     })
 
     events.put_events(Entries=[{

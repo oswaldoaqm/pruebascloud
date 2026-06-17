@@ -9,6 +9,7 @@ from boto3.dynamodb.conditions import Key
 
 dynamodb = boto3.resource("dynamodb")
 tabla = dynamodb.Table(os.environ["ORDERS_TABLE"])
+productos_tbl = dynamodb.Table(os.environ["PRODUCTS_TABLE"])
 events = boto3.client("events")
 BUS = os.environ["EVENT_BUS"]
 RAPPI_API_KEY = os.environ["RAPPI_API_KEY"]
@@ -29,16 +30,33 @@ def _response(status: int, body) -> dict:
 
 
 def _crear_pedido(tenant_id: str, items: list, origin: str, cliente: dict):
-    """Lógica común: guarda el pedido y publica order.placed en EventBridge."""
+    """Lógica común: valida ítems contra el catálogo, guarda el pedido y publica order.placed.
+
+    SEGURIDAD: el precio y el nombre se toman SIEMPRE del catálogo (t_productos), nunca
+    del body — así un cliente no puede manipular el precio. Se rechazan productos inexistentes.
+    """
     if not items or not isinstance(items, list):
         return None, "items debe ser una lista no vacía"
+
+    validados = []
+    total = Decimal("0")
     for it in items:
-        if not all(k in it for k in ("product_id", "nombre", "precio", "cant")):
-            return None, "Cada item requiere: product_id, nombre, precio, cant"
+        pid = it.get("product_id")
+        try:
+            cant = int(it.get("cant", 0))
+        except (TypeError, ValueError):
+            return None, "cant inválido"
+        if not pid or cant <= 0:
+            return None, "Cada item requiere product_id y cant > 0"
+        prod = productos_tbl.get_item(Key={"PK": f"TENANT#{tenant_id}", "SK": f"PROD#{pid}"}).get("Item")
+        if not prod:
+            return None, f"Producto no encontrado en el catálogo: {pid}"
+        precio = Decimal(str(prod["precio"]))   # precio autoritativo del catálogo
+        validados.append({"product_id": pid, "nombre": prod["nombre"], "precio": precio, "cant": cant})
+        total += precio * cant
 
     order_id = uuid.uuid4().hex[:8]  # corto y legible para la demo
     created_at = _now()
-    total = sum(Decimal(str(i["precio"])) * int(i["cant"]) for i in items)
 
     item = {
         "PK": f"TENANT#{tenant_id}",
@@ -49,7 +67,7 @@ def _crear_pedido(tenant_id: str, items: list, origin: str, cliente: dict):
         "tenant_id": tenant_id,
         "origin": origin,  # WEB | RAPPI
         "status": "RECEIVED",
-        "items": [{**i, "precio": Decimal(str(i["precio"])), "cant": int(i["cant"])} for i in items],
+        "items": validados,
         "total": total,
         "cliente": cliente,
         "created_at": created_at,

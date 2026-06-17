@@ -182,7 +182,11 @@ function Tareas({ sesion, toast }) {
           {pendientes.length === 0 && <div className="empty">Sin tareas pendientes</div>}
           {pendientes.map(t => (
             <div className="tarea" key={t.order_id}>
-              <div><b>#{t.order_id}</b> <span className={`chip ${t.origin}`}>{t.origin}</span><div className="info">Llegó {hace(t.started_at)}</div></div>
+              <div>
+                <b>#{t.order_id}</b> <span className={`chip ${t.origin}`}>{t.origin}</span>
+                <div className="info">🍕 {t.items_resumen || '—'}</div>
+                <div className="info">{t.cliente ? `${t.cliente} · ` : ''}llegó {hace(t.started_at)}</div>
+              </div>
               <button className="btn btn-green" onClick={() => accion(t.order_id, 'tomar')}>Tomar</button>
             </div>
           ))}
@@ -192,7 +196,11 @@ function Tareas({ sesion, toast }) {
           {enCurso.length === 0 && <div className="empty">Nada en curso</div>}
           {enCurso.map(t => (
             <div className="tarea" key={t.order_id}>
-              <div><b>#{t.order_id}</b> <span className={`chip ${t.origin}`}>{t.origin}</span><div className="info">Por {t.worker_name} · {hace(t.taken_at)}</div></div>
+              <div>
+                <b>#{t.order_id}</b> <span className={`chip ${t.origin}`}>{t.origin}</span>
+                <div className="info">🍕 {t.items_resumen || '—'}</div>
+                <div className="info">Por {t.worker_name} · {hace(t.taken_at)}</div>
+              </div>
               <button className="btn btn-red" onClick={() => accion(t.order_id, 'completar')}>Completar</button>
             </div>
           ))}
@@ -207,7 +215,17 @@ const KCOLS = ['RECEIVED', 'COOKING', 'PACKING', 'DELIVERING', 'DELIVERED']
 function Kanban({ sesion, toast, ask }) {
   const [pedidos, setPedidos] = useState([])
   const [timeline, setTimeline] = useState(null)
+  const [q, setQ] = useState('')
   const auth = { Authorization: `Bearer ${sesion.token}` }
+  const filtrar = (lista) => {
+    const t = q.trim().toLowerCase()
+    if (!t) return lista
+    return lista.filter(p =>
+      p.order_id?.toLowerCase().includes(t) ||
+      (p.cliente?.nombre || '').toLowerCase().includes(t) ||
+      (p.origin || '').toLowerCase().includes(t) ||
+      (p.items || []).some(i => (i.nombre || '').toLowerCase().includes(t)))
+  }
   const cargar = () => fetch(`${API_PEDIDOS}/pedidos`, { headers: auth }).then(r => r.json()).then(d => setPedidos(d.pedidos || [])).catch(() => {})
   useEffect(() => { cargar(); const t = setInterval(cargar, 6000); return () => clearInterval(t) }, [])
   const verTimeline = async (oid, status) => {
@@ -225,9 +243,11 @@ function Kanban({ sesion, toast, ask }) {
     <div>
       <h1 className="page-title">Pedidos en vivo</h1>
       <p className="page-sub">El tablero se actualiza solo conforme avanza el flujo de trabajo.</p>
+      <input className="field" style={{ maxWidth: 340, marginBottom: 16 }} placeholder="🔎 Buscar por #id, cliente, origen o producto…"
+             value={q} onChange={e => setQ(e.target.value)} />
       <div className="kanban">
         {KCOLS.map(col => {
-          const items = pedidos.filter(p => p.status === col)
+          const items = filtrar(pedidos.filter(p => p.status === col))
           return (
             <div className="kcol" key={col}>
               <div className="kcol-head" style={{ borderColor: STATUS_COLOR[col] }}>
@@ -238,6 +258,7 @@ function Kanban({ sesion, toast, ask }) {
                 {items.map(p => (
                   <div className="kcard" key={p.order_id} onClick={() => verTimeline(p.order_id, p.status)}>
                     <div className="kc-top"><b>#{p.order_id}</b><span className={`chip ${p.origin}`}>{p.origin}</span></div>
+                    <div className="kc-meta">{(p.items || []).map(i => `${i.cant}x ${i.nombre}`).join(', ') || '—'}</div>
                     <div className="kc-meta">{p.cliente?.nombre || '—'} · {fmt(p.created_at)}</div>
                     <div className="kc-total">{soles(p.total)}</div>
                   </div>
@@ -253,6 +274,14 @@ function Kanban({ sesion, toast, ask }) {
           <div className="modal">
             <button className="icon-btn close" onClick={() => setTimeline(null)}><X size={18} /></button>
             <h2>Timeline #{timeline.order_id}</h2>
+            {(() => {
+              const done = timeline.pasos.filter(s => s.finished_at)
+              if (timeline.pasos.length === 0) return null
+              const ini = timeline.pasos[0]?.started_at
+              const fin = done.length === timeline.pasos.length && done.length ? done[done.length - 1].finished_at : null
+              const mins = ini && fin ? ((new Date(fin) - new Date(ini)) / 60000).toFixed(1) : null
+              return <p className="page-sub" style={{ marginBottom: 12 }}>{mins ? `⏱ Tiempo total: ${mins} min` : '⏳ Pedido en curso…'}</p>
+            })()}
             {timeline.pasos.length === 0 && <div className="empty">El workflow aún no genera pasos.</div>}
             {timeline.pasos.map(s => (
               <div className="step-row" key={s.paso}>
