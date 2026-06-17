@@ -161,6 +161,10 @@ functions:
     handler: workflow.finalizar
   fallar:
     handler: workflow.fallar
+  cancelarPedido:
+    handler: workflow.cancelar
+    events:
+      - httpApi: { path: '/pedidos/{order_id}/cancelar', method: post, authorizer: { name: jwtAuth } }
   notifyRappi:
     handler: workflow.notify_rappi
     events:

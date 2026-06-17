@@ -100,7 +100,7 @@ export default function App() {
       <main className="content">
         {esSuper ? <SuperAdmin sesion={sesion} ask={ask} toast={toast} />
           : vista === 'tareas' ? <Tareas sesion={sesion} toast={toast} />
-          : vista === 'pedidos' ? <Kanban sesion={sesion} />
+          : vista === 'pedidos' ? <Kanban sesion={sesion} toast={toast} ask={ask} />
           : vista === 'dashboard' ? <Dashboard sesion={sesion} />
           : vista === 'admin' && esAdmin ? <Admin sesion={sesion} ask={ask} toast={toast} />
           : vista === 'productos' && esAdmin ? <ProductosAdmin sesion={sesion} ask={ask} toast={toast} />
@@ -204,15 +204,22 @@ function Tareas({ sesion, toast }) {
 
 const KCOLS = ['RECEIVED', 'COOKING', 'PACKING', 'DELIVERING', 'DELIVERED']
 
-function Kanban({ sesion }) {
+function Kanban({ sesion, toast, ask }) {
   const [pedidos, setPedidos] = useState([])
   const [timeline, setTimeline] = useState(null)
   const auth = { Authorization: `Bearer ${sesion.token}` }
   const cargar = () => fetch(`${API_PEDIDOS}/pedidos`, { headers: auth }).then(r => r.json()).then(d => setPedidos(d.pedidos || [])).catch(() => {})
   useEffect(() => { cargar(); const t = setInterval(cargar, 6000); return () => clearInterval(t) }, [])
-  const verTimeline = async (oid) => {
+  const verTimeline = async (oid, status) => {
     const r = await fetch(`${API_WORKFLOW}/tareas/${oid}`, { headers: auth }); const d = await r.json()
-    setTimeline({ order_id: oid, pasos: d.pasos || [] })
+    setTimeline({ order_id: oid, status, pasos: d.pasos || [] })
+  }
+  const cancelar = async (oid) => {
+    if (!await ask(`¿Cancelar el pedido #${oid}? Se notificará a Rappi si corresponde.`)) return
+    const r = await fetch(`${API_PEDIDOS}/pedidos/${oid}/cancelar`, { method: 'POST', headers: auth })
+    const d = await r.json()
+    if (!r.ok) return toast('⚠️ ' + (d.error || 'No se pudo cancelar'))
+    toast('Pedido cancelado', <Check size={16} />); setTimeline(null); cargar()
   }
   return (
     <div>
@@ -229,7 +236,7 @@ function Kanban({ sesion }) {
               </div>
               <div className="kcol-body">
                 {items.map(p => (
-                  <div className="kcard" key={p.order_id} onClick={() => verTimeline(p.order_id)}>
+                  <div className="kcard" key={p.order_id} onClick={() => verTimeline(p.order_id, p.status)}>
                     <div className="kc-top"><b>#{p.order_id}</b><span className={`chip ${p.origin}`}>{p.origin}</span></div>
                     <div className="kc-meta">{p.cliente?.nombre || '—'} · {fmt(p.created_at)}</div>
                     <div className="kc-total">{soles(p.total)}</div>
@@ -254,6 +261,11 @@ function Kanban({ sesion }) {
                 <div className="t">Atendió: {s.worker_name || '—'}</div>
               </div>
             ))}
+            {!['DELIVERED', 'FAILED'].includes(timeline.status) && (
+              <button className="btn btn-red" style={{ width: '100%', justifyContent: 'center', marginTop: 14 }} onClick={() => cancelar(timeline.order_id)}>
+                Cancelar pedido
+              </button>
+            )}
           </div>
         </div>
       )}

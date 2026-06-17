@@ -198,7 +198,7 @@ export default function App() {
       )}
 
       {tracking && <Tracker sesion={sesion} orderId={tracking} onClose={() => setTracking(null)} />}
-      {showPedidos && sesion && <MisPedidos sesion={sesion} onClose={() => setShowPedidos(false)} onTrack={oid => { setShowPedidos(false); setTracking(oid) }} />}
+      {showPedidos && sesion && <MisPedidos sesion={sesion} toast={toast} onClose={() => setShowPedidos(false)} onTrack={oid => { setShowPedidos(false); setTracking(oid) }} />}
       {showLogin && <LoginModal tenant={tenant} onClose={() => setShowLogin(false)} toast={toast}
         onLogin={s => { localStorage.setItem('sesion', JSON.stringify(s)); setSesion(s); setShowLogin(false); toast(`Hola, ${s.nombre.split(' ')[0]}`) }} />}
       {toastView}
@@ -242,12 +242,21 @@ function Tracker({ sesion, orderId, onClose }) {
   )
 }
 
-function MisPedidos({ sesion, onClose, onTrack }) {
+function MisPedidos({ sesion, toast, onClose, onTrack }) {
   const [pedidos, setPedidos] = useState(null)
-  useEffect(() => {
-    fetch(`${API_PEDIDOS}/pedidos`, { headers: { Authorization: `Bearer ${sesion.token}` } })
-      .then(r => r.json()).then(d => setPedidos((d.pedidos || []).reverse())).catch(() => setPedidos([]))
-  }, [])
+  const cargar = () => fetch(`${API_PEDIDOS}/pedidos`, { headers: { Authorization: `Bearer ${sesion.token}` } })
+    .then(r => r.json()).then(d => setPedidos((d.pedidos || []).reverse())).catch(() => setPedidos([]))
+  useEffect(() => { cargar() }, [])
+
+  const cancelar = async (oid) => {
+    if (!confirm(`¿Cancelar el pedido #${oid}?`)) return
+    const r = await fetch(`${API_PEDIDOS}/pedidos/${oid}/cancelar`, { method: 'POST', headers: { Authorization: `Bearer ${sesion.token}` } })
+    const d = await r.json()
+    if (!r.ok) return toast('⚠️ ' + (d.error || 'No se pudo cancelar'))
+    toast('Pedido cancelado'); cargar()
+  }
+  const cancelable = (s) => !['DELIVERED', 'FAILED'].includes(s)
+
   return (
     <div className="modal-center"><div className="overlay" onClick={onClose} />
       <div className="modal">
@@ -262,7 +271,8 @@ function MisPedidos({ sesion, onClose, onTrack }) {
               <div className="pedido-fecha">{new Date(p.created_at).toLocaleString('es-PE')}</div>
             </div>
             <span className={`chip ${p.status}`}>{FLOW_LABEL[p.status] || p.status}</span>
-            <button className="btn btn-green" style={{ padding: '7px 14px' }} onClick={() => onTrack(p.order_id)}>Ver</button>
+            <button className="btn btn-green" style={{ padding: '7px 12px' }} onClick={() => onTrack(p.order_id)}>Ver</button>
+            {cancelable(p.status) && <button className="btn btn-ghost" style={{ padding: '7px 12px' }} onClick={() => cancelar(p.order_id)}>Cancelar</button>}
           </div>
         ))}
       </div>
