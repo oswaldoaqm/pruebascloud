@@ -262,7 +262,7 @@ resources:
       Properties:
         TopicArn: { Ref: PedidosTopic }
         Protocol: email
-        Endpoint: oswaldoaqm@gmail.com
+        Endpoint: oswaldo.quispe@utec.edu.pe
 
     UsersTable:
       Type: AWS::DynamoDB::Table
