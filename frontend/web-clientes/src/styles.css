@@ -216,6 +216,11 @@ h1, h2, h3, .logo { font-family: 'Poppins', sans-serif; }
 .track-step .lbl { font-weight: 600; color: var(--text-soft); }
 .track-step.done .lbl, .track-step.current .lbl { color: var(--text); }
 .track-done-msg { text-align: center; margin-top: 14px; font-weight: 700; color: var(--pj-green); }
+.historial { margin-top: 12px; border-top: 1px dashed var(--border); padding-top: 10px; display: flex; flex-direction: column; gap: 6px; }
+.hist-row { display: flex; align-items: center; gap: 8px; font-size: .85rem; color: var(--text-soft); }
+.hist-row span:first-of-type { flex: 1; color: var(--text); font-weight: 600; }
+.hist-row .hist-h { color: var(--text-soft); font-weight: 600; }
+.hist-row svg { color: var(--pj-green); }
 
 /* ============ MIS PEDIDOS ============ */
 .pedido-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); margin-bottom: 8px; background: var(--surface-2); }

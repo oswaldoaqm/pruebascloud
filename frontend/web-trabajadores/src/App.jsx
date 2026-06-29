@@ -308,8 +308,13 @@ function tooltipStyle() {
 
 function Dashboard({ sesion }) {
   const [data, setData] = useState(null)
+  const [biz, setBiz] = useState(null)
   useEffect(() => {
-    const load = () => fetch(`${API_WORKFLOW}/dashboard`, { headers: { Authorization: `Bearer ${sesion.token}` } }).then(r => r.json()).then(setData).catch(() => {})
+    const h = { Authorization: `Bearer ${sesion.token}` }
+    const load = () => {
+      fetch(`${API_WORKFLOW}/dashboard`, { headers: h }).then(r => r.json()).then(setData).catch(() => {})
+      fetch(`${API_PEDIDOS}/pedidos/metricas`, { headers: h }).then(r => r.json()).then(setBiz).catch(() => {})
+    }
     load(); const t = setInterval(load, 10000); return () => clearInterval(t)
   }, [])
   if (!data) return <div className="empty">Cargando dashboard…</div>
@@ -317,14 +322,18 @@ function Dashboard({ sesion }) {
   const tiempos = Object.entries(data.tiempo_promedio_min_por_paso || {}).map(([paso, min]) => ({ paso: PASO_LABEL[paso]?.split(' ')[1] || paso, min: min || 0 }))
   const estados = Object.entries(est).filter(([, v]) => v > 0).map(([name, value]) => ({ name, value }))
   const trab = Object.entries(data.tareas_completadas_por_trabajador || {}).sort((a, b) => b[1] - a[1])
+  const topProd = (biz?.top_productos || []).map(p => ({ nombre: p.nombre, cant: p.cant }))
+  const ventasDia = (biz?.ventas_por_dia || []).map(v => ({ dia: v.dia.slice(5), monto: Number(v.monto) }))
   return (
     <div>
       <h1 className="page-title">Dashboard de la sede</h1>
       <p className="page-sub">{sesion.tenant_id} · se actualiza cada 10s</p>
       <div className="cards">
+        <KPI icon={DollarSign} color="#1aa86b" label="Ventas (entregado)" value={soles(biz?.ventas_total)} />
+        <KPI icon={TrendingUp} color="#1f6feb" label="Ticket promedio" value={soles(biz?.ticket_promedio)} />
+        <KPI icon={Check} color="#8a3ffc" label="Pedidos entregados" value={biz?.entregados ?? 0} />
         <KPI icon={Clock} color="#8a8a8a" label="Pendientes" value={est.PENDING ?? 0} />
-        <KPI icon={Package} color="#e8730a" label="En curso" value={est.IN_PROGRESS ?? 0} />
-        <KPI icon={Check} color="#1aa86b" label="Completadas" value={est.DONE ?? 0} />
+        <KPI icon={Package} color="#e8730a" label="Tareas en curso" value={est.IN_PROGRESS ?? 0} />
       </div>
       <div className="charts">
         <div className="chart-card">
@@ -349,6 +358,34 @@ function Dashboard({ sesion }) {
               <Tooltip contentStyle={tooltipStyle()} /><Legend />
             </PieChart>
           </ResponsiveContainer>
+        </div>
+        <div className="chart-card">
+          <h3>🍕 Productos más vendidos</h3>
+          {topProd.length === 0 ? <div className="empty">Sin ventas aún.</div> : (
+            <ResponsiveContainer width="100%" height={240}>
+              <BarChart data={topProd} layout="vertical" margin={{ left: 20 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                <XAxis type="number" tick={{ fill: '#94a39b', fontSize: 11 }} />
+                <YAxis type="category" dataKey="nombre" width={110} tick={{ fill: '#94a39b', fontSize: 11 }} />
+                <Tooltip contentStyle={tooltipStyle()} />
+                <Bar dataKey="cant" fill="#e8730a" radius={[0, 6, 6, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+        </div>
+        <div className="chart-card">
+          <h3>📈 Ventas por día (S/)</h3>
+          {ventasDia.length === 0 ? <div className="empty">Sin ventas aún.</div> : (
+            <ResponsiveContainer width="100%" height={240}>
+              <BarChart data={ventasDia}>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                <XAxis dataKey="dia" tick={{ fill: '#94a39b', fontSize: 11 }} />
+                <YAxis tick={{ fill: '#94a39b', fontSize: 11 }} />
+                <Tooltip contentStyle={tooltipStyle()} formatter={v => soles(v)} />
+                <Bar dataKey="monto" fill="#1aa86b" radius={[6, 6, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          )}
         </div>
         <div className="chart-card tall">
           <h3>🏆 Tareas completadas por trabajador</h3>

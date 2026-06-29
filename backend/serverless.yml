@@ -16,6 +16,9 @@ provider:
   runtime: python3.12
   region: us-east-1
   stage: dev
+  tracing:                 # X-Ray: trazas distribuidas (API Gateway + Lambda)
+    lambda: true
+    apiGateway: true
   iam:
     role: arn:aws:iam::${aws:accountId}:role/LabRole
   httpApi:
@@ -131,6 +134,10 @@ functions:
     handler: pedidos.crear_rappi
     events:
       - httpApi: { path: /pedidos/rappi, method: post }
+  metricasPedidos:
+    handler: pedidos.metricas
+    events:
+      - httpApi: { path: /pedidos/metricas, method: get, authorizer: { name: jwtAuth } }
   obtenerPedido:
     handler: pedidos.obtener
     events:
@@ -263,6 +270,64 @@ resources:
         TopicArn: { Ref: PedidosTopic }
         Protocol: email
         Endpoint: oswaldo.quispe@utec.edu.pe
+
+    # ── Observabilidad: alarma sobre la DLQ + dashboard de CloudWatch ──
+    DLQAlarm:                       # si algo cae a la DLQ, avisa por SNS (email)
+      Type: AWS::CloudWatch::Alarm
+      Properties:
+        AlarmName: rappi-dlq-no-vacia-${sls:stage}
+        AlarmDescription: Hay mensajes en la DLQ de Rappi (fallos no procesados).
+        Namespace: AWS/SQS
+        MetricName: ApproximateNumberOfMessagesVisible
+        Dimensions:
+          - Name: QueueName
+            Value: rappi-dlq-${sls:stage}
+        Statistic: Maximum
+        Period: 60
+        EvaluationPeriods: 1
+        Threshold: 0
+        ComparisonOperator: GreaterThanThreshold
+        TreatMissingData: notBreaching
+        AlarmActions: [ { Ref: PedidosTopic } ]
+
+    Dashboard:
+      Type: AWS::CloudWatch::Dashboard
+      Properties:
+        DashboardName: papa-johns-${sls:stage}
+        DashboardBody: |
+          {
+            "widgets": [
+              { "type": "metric", "x": 0, "y": 0, "width": 12, "height": 6,
+                "properties": { "title": "Lambda · Errores", "region": "${aws:region}", "stat": "Sum", "period": 300,
+                  "metrics": [
+                    ["AWS/Lambda","Errors","FunctionName","${self:service}-${sls:stage}-crearPedido"],
+                    ["AWS/Lambda","Errors","FunctionName","${self:service}-${sls:stage}-startWorkflow"],
+                    ["AWS/Lambda","Errors","FunctionName","${self:service}-${sls:stage}-asignarTarea"],
+                    ["AWS/Lambda","Errors","FunctionName","${self:service}-${sls:stage}-notifyRappi"]
+                  ] } },
+              { "type": "metric", "x": 12, "y": 0, "width": 12, "height": 6,
+                "properties": { "title": "Lambda · Invocaciones", "region": "${aws:region}", "stat": "Sum", "period": 300,
+                  "metrics": [
+                    ["AWS/Lambda","Invocations","FunctionName","${self:service}-${sls:stage}-crearPedido"],
+                    ["AWS/Lambda","Invocations","FunctionName","${self:service}-${sls:stage}-completarTarea"],
+                    ["AWS/Lambda","Invocations","FunctionName","${self:service}-${sls:stage}-notifyRappi"]
+                  ] } },
+              { "type": "metric", "x": 0, "y": 6, "width": 12, "height": 6,
+                "properties": { "title": "SQS · Mensajes en cola / DLQ", "region": "${aws:region}", "stat": "Maximum", "period": 60,
+                  "metrics": [
+                    ["AWS/SQS","ApproximateNumberOfMessagesVisible","QueueName","rappi-cola-${sls:stage}"],
+                    ["AWS/SQS","ApproximateNumberOfMessagesVisible","QueueName","rappi-dlq-${sls:stage}"],
+                    ["AWS/SQS","ApproximateNumberOfMessagesVisible","QueueName","eventos-dlq-${sls:stage}"]
+                  ] } },
+              { "type": "metric", "x": 12, "y": 6, "width": 12, "height": 6,
+                "properties": { "title": "Step Functions · Ejecuciones", "region": "${aws:region}", "stat": "Sum", "period": 300,
+                  "metrics": [
+                    ["AWS/States","ExecutionsStarted","StateMachineArn","arn:aws:states:${aws:region}:${aws:accountId}:stateMachine:pedido-workflow-${sls:stage}"],
+                    ["AWS/States","ExecutionsSucceeded","StateMachineArn","arn:aws:states:${aws:region}:${aws:accountId}:stateMachine:pedido-workflow-${sls:stage}"],
+                    ["AWS/States","ExecutionsFailed","StateMachineArn","arn:aws:states:${aws:region}:${aws:accountId}:stateMachine:pedido-workflow-${sls:stage}"]
+                  ] } }
+            ]
+          }
 
     UsersTable:
       Type: AWS::DynamoDB::Table

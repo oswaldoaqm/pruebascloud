@@ -1,0 +1,44 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  backend:
+    name: Backend · sintaxis + tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
+      - name: Compilar todos los handlers
+        run: python -m py_compile backend/*.py oci/rappi-ingest/main.py oci/rappi-status/main.py
+      - name: Instalar pytest
+        run: pip install pytest
+      - name: Tests unitarios
+        run: pytest backend/tests -q
+
+  frontend:
+    name: Frontend · build de ambas webs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - name: Build web-clientes
+        working-directory: frontend/web-clientes
+        run: npm install --no-audit --no-fund && npm run build
+      - name: Build web-trabajadores
+        working-directory: frontend/web-trabajadores
+        run: npm install --no-audit --no-fund && npm run build
+
+  scripts:
+    name: Scripts · sintaxis bash
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verificar sintaxis de los scripts
+        run: for s in scripts/*.sh; do bash -n "$s"; done

@@ -178,6 +178,47 @@ def listar(event, context):
     return _response(200, {"count": len(pedidos), "pedidos": pedidos})
 
 
+def metricas(event, context):
+    """GET /pedidos/metricas — métricas de negocio de la sede (ventas, ticket, top productos, ventas/día)."""
+    ctx = event.get("requestContext", {}).get("authorizer", {}).get("lambda", {})
+    tenant_id = ctx["tenant_id"]
+
+    items, start_key = [], None
+    while True:
+        kwargs = {"KeyConditionExpression": Key("PK").eq(f"TENANT#{tenant_id}") & Key("SK").begins_with("ORDER#")}
+        if start_key:
+            kwargs["ExclusiveStartKey"] = start_key
+        res = tabla.query(**kwargs)
+        items.extend(res.get("Items", []))
+        start_key = res.get("LastEvaluatedKey")
+        if not start_key:
+            break
+
+    entregados = [p for p in items if p.get("status") == "DELIVERED"]
+    ventas = sum((p.get("total", 0) for p in entregados), Decimal("0"))
+    ticket = (ventas / len(entregados)) if entregados else Decimal("0")
+
+    por_producto, por_dia = {}, {}
+    for p in entregados:
+        for it in p.get("items", []):
+            n = it.get("nombre", "?")
+            por_producto[n] = por_producto.get(n, 0) + int(it.get("cant", 0))
+        dia = (p.get("created_at") or "")[:10]
+        if dia:
+            por_dia[dia] = por_dia.get(dia, Decimal("0")) + Decimal(str(p.get("total", 0)))
+
+    top = sorted(por_producto.items(), key=lambda x: -x[1])[:5]
+    dias = sorted(por_dia.items())[-7:]   # últimos 7 días con ventas
+    return _response(200, {
+        "pedidos_totales": len(items),
+        "entregados": len(entregados),
+        "ventas_total": ventas,
+        "ticket_promedio": round(ticket, 2),
+        "top_productos": [{"nombre": n, "cant": c} for n, c in top],
+        "ventas_por_dia": [{"dia": d, "monto": m} for d, m in dias],
+    })
+
+
 def actualizar_status(event, context):
     """Consumidor EventBridge: ms.workflow publica order.step.changed / order.completed."""
     detail = event.get("detail", {})

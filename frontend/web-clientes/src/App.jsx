@@ -348,15 +348,29 @@ function Rastrea({ sesion, onLogin, onTrack }) {
   )
 }
 
+const PASO_LBL = { COCINAR: 'Cocinado', EMPACAR: 'Empacado', REPARTIR: 'En reparto', ENTREGAR: 'Entregado' }
+const hora = (iso) => iso ? new Date(iso).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' }) : null
+
 function Tracker({ sesion, orderId, onClose }) {
   const [status, setStatus] = useState('RECEIVED')
+  const [pasos, setPasos] = useState([])
   useEffect(() => {
-    const load = () => fetch(`${API_PEDIDOS}/pedidos/${orderId}`, { headers: { Authorization: `Bearer ${sesion.token}` } })
-      .then(r => r.json()).then(d => setStatus(d.status || 'RECEIVED')).catch(() => {})
+    const h = { Authorization: `Bearer ${sesion.token}` }
+    const load = () => {
+      fetch(`${API_PEDIDOS}/pedidos/${orderId}`, { headers: h }).then(r => r.json()).then(d => setStatus(d.status || 'RECEIVED')).catch(() => {})
+      fetch(`${API_PEDIDOS}/tareas/${orderId}`, { headers: h }).then(r => r.json()).then(d => setPasos(d.pasos || [])).catch(() => {})
+    }
     load(); const t = setInterval(load, 5000); return () => clearInterval(t)
   }, [orderId])
   const idx = FLOW.indexOf(status)
   const entregado = status === 'DELIVERED'
+  // ETA: promedio de los pasos ya completados × pasos restantes (heurística data-driven)
+  const hechos = pasos.filter(p => p.finished_at && p.started_at)
+  const durs = hechos.map(p => (new Date(p.finished_at) - new Date(p.started_at)) / 60000).filter(m => m > 0)
+  const avg = durs.length ? durs.reduce((a, b) => a + b, 0) / durs.length : 6
+  const restantes = Math.max(0, 4 - hechos.length)
+  const eta = Math.max(1, Math.round(avg * restantes))
+  const historial = pasos.filter(p => p.finished_at).map(p => ({ lbl: PASO_LBL[p.paso] || p.paso, h: hora(p.finished_at) }))
   return (
     <div className="modal-center"><div className="overlay" onClick={onClose} />
       <div className="modal">
@@ -378,8 +392,15 @@ function Tracker({ sesion, orderId, onClose }) {
         <p className="track-done-msg">
           {status === 'DELIVERED' ? <><PartyPopper size={18} style={{ verticalAlign: 'middle' }} /> ¡Buen provecho!</>
             : status === 'FAILED' ? '⚠️ Hubo un problema con tu pedido.'
-            : 'Actualizando en tiempo real…'}
+            : <>⏱ Tiempo estimado: ~{eta} min</>}
         </p>
+        {historial.length > 0 && (
+          <div className="historial">
+            {historial.map((e, i) => (
+              <div className="hist-row" key={i}><Check size={14} /> <span>{e.lbl}</span><span className="hist-h">{e.h}</span></div>
+            ))}
+          </div>
+        )}
         <button className="btn btn-ghost" style={{ width: '100%', justifyContent: 'center', marginTop: 12 }} onClick={onClose}>Cerrar</button>
       </div>
     </div>
