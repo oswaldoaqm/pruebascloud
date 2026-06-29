@@ -110,6 +110,25 @@ h1, h2, h3, .logo { font-family: 'Poppins', sans-serif; }
 .user-chip { display: flex; align-items: center; gap: 8px; color: var(--text-soft); font-size: .9rem; }
 .user-chip b { color: var(--text); }
 
+/* ============ NAV DE SECCIONES ============ */
+.topnav { display: flex; gap: 4px; padding: 0 24px; background: var(--surface); border-bottom: 1px solid var(--border); position: sticky; top: 67px; z-index: 19; overflow-x: auto; }
+.navlink { display: flex; align-items: center; gap: 7px; padding: 14px 16px; border: none; background: transparent; color: var(--text-soft); font-weight: 700; font-family: inherit; font-size: .92rem; cursor: pointer; border-bottom: 3px solid transparent; white-space: nowrap; transition: color .15s, border-color .15s; }
+.navlink:hover { color: var(--pj-green); }
+.navlink.active { color: var(--pj-green); border-bottom-color: var(--pj-green); }
+
+/* ============ SECCIONES ============ */
+.seccion { max-width: 1100px; margin: 0 auto; padding: 28px 24px 48px; }
+.sec-title { display: flex; align-items: center; gap: 10px; color: var(--pj-green); font-size: 1.5rem; margin-bottom: 6px; }
+.sec-sub { color: var(--text-soft); margin-bottom: 22px; }
+.card.promo .promo-img { background: linear-gradient(135deg, var(--pj-red), #ff6d4a); color: #fff; position: relative; }
+.promo-badge { position: absolute; top: 10px; right: 10px; background: var(--pj-gold); color: #4a3700; font-size: .7rem; font-weight: 800; padding: 3px 10px; border-radius: 999px; }
+.card.local.sel { border-color: var(--pj-green); box-shadow: 0 0 0 2px color-mix(in srgb, var(--pj-green) 35%, transparent); }
+.card.local h3 { display: flex; align-items: center; gap: 8px; color: var(--pj-green); }
+.nosotros p { max-width: 760px; line-height: 1.6; margin-bottom: 12px; color: var(--text); }
+.vals { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-top: 24px; }
+.val { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 22px; display: flex; flex-direction: column; gap: 6px; align-items: flex-start; color: var(--pj-green); box-shadow: var(--shadow); }
+.val b { font-size: 1.05rem; color: var(--text); } .val span { color: var(--text-soft); font-size: .88rem; }
+
 /* ============ HERO ============ */
 .hero {
   margin: 20px 24px 0; border-radius: 24px; overflow: hidden;

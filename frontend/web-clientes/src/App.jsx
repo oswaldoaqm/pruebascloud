@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, useCallback } from 'react'
 import {
-  ShoppingCart, User, LogOut, Plus, Minus, X, Moon, Sun, MapPin,
-  ClipboardList, Check, Pizza, PartyPopper, ChevronDown,
+  ShoppingCart, User, LogOut, Plus, Minus, X, Moon, Sun, MapPin, ChevronDown,
+  ClipboardList, Check, Pizza, PartyPopper, Tag, Store, Truck, Info, UtensilsCrossed,
 } from 'lucide-react'
 import { API_USUARIOS, API_PRODUCTOS, API_PEDIDOS, API_SEDES, TENANTS } from './config.js'
 
@@ -15,7 +15,26 @@ const CATEGORIAS = [
 const EMOJI = { pizzas: '🍕', complementos: '🧄', bebidas: '🥤', postres: '🍫' }
 const soles = (n) => 'S/ ' + Number(n || 0).toFixed(2)
 
-/* ---------- Toasts (hook simple) ---------- */
+const SECCIONES = [
+  { id: 'menu', label: 'Menú', icon: UtensilsCrossed },
+  { id: 'promos', label: 'Promos exclusivas', icon: Tag },
+  { id: 'locales', label: 'Locales', icon: Store },
+  { id: 'rastrea', label: 'Rastrea tu pedido', icon: Truck },
+  { id: 'nosotros', label: 'Nosotros', icon: Info },
+]
+
+// Combos sugeridos (bundles del catálogo). El total real lo calcula el servidor con precios de catálogo.
+const PROMOS = [
+  { id: 'combo-pareja', nombre: 'Combo Pareja 💑', desc: '1 Pepperoni + 1 Hawaiana + Pepsi 1.5L', emoji: '❤️',
+    items: [{ product_id: 'pz-pepperoni', cant: 1 }, { product_id: 'pz-hawaiana', cant: 1 }, { product_id: 'bd-pepsi15', cant: 1 }] },
+  { id: 'combo-familiar', nombre: 'Combo Familiar 👨‍👩‍👧', desc: '1 Super Papa + Palitos de Ajo + Pepsi 1.5L', emoji: '🍕',
+    items: [{ product_id: 'pz-superpapa', cant: 1 }, { product_id: 'cp-breadsticks', cant: 1 }, { product_id: 'bd-pepsi15', cant: 1 }] },
+  { id: 'combo-amigos', nombre: 'Combo Amigos 🎉', desc: '2 Cheese + Chicken Poppers', emoji: '🧀',
+    items: [{ product_id: 'pz-cheese', cant: 2 }, { product_id: 'cp-poppers', cant: 1 }] },
+  { id: 'combo-dulce', nombre: 'Antojo Dulce 🍫', desc: '1 Pepperoni + Mega Brownie', emoji: '🍫',
+    items: [{ product_id: 'pz-pepperoni', cant: 1 }, { product_id: 'ps-brownie', cant: 1 }] },
+]
+
 function useToasts() {
   const [toasts, setToasts] = useState([])
   const push = useCallback((msg, icon) => {
@@ -23,11 +42,7 @@ function useToasts() {
     setToasts(t => [...t, { id, msg, icon }])
     setTimeout(() => setToasts(t => t.filter(x => x.id !== id)), 2600)
   }, [])
-  const view = (
-    <div className="toasts">
-      {toasts.map(t => <div className="toast" key={t.id}>{t.icon}{t.msg}</div>)}
-    </div>
-  )
+  const view = <div className="toasts">{toasts.map(t => <div className="toast" key={t.id}>{t.icon}{t.msg}</div>)}</div>
   return [push, view]
 }
 
@@ -41,18 +56,17 @@ export default function App() {
   const [sesion, setSesion] = useState(() => JSON.parse(localStorage.getItem('sesion') || 'null'))
   const [showLogin, setShowLogin] = useState(false)
   const [showCart, setShowCart] = useState(false)
-  const [showPedidos, setShowPedidos] = useState(false)
   const [cart, setCart] = useState([])
   const [tracking, setTracking] = useState(null)
   const [ordenando, setOrdenando] = useState(false)
+  const [seccion, setSeccion] = useState('menu')
   const [toast, toastView] = useToasts()
 
   useEffect(() => { document.documentElement.setAttribute('data-theme', theme); localStorage.setItem('theme', theme) }, [theme])
 
   useEffect(() => {
     fetch(`${API_SEDES}/sedes`).then(r => r.json())
-      .then(d => { if (d.sedes?.length) setSedes(d.sedes.map(s => ({ id: s.id, nombre: s.nombre }))) })
-      .catch(() => {})
+      .then(d => { if (d.sedes?.length) setSedes(d.sedes) }).catch(() => {})
   }, [])
 
   useEffect(() => {
@@ -69,13 +83,22 @@ export default function App() {
   const totalItems = cart.reduce((s, i) => s + i.cant, 0)
   const total = cart.reduce((s, i) => s + i.precio * i.cant, 0)
 
-  const addCart = (p) => {
+  const addCart = (p, n = 1) => {
     setCart(prev => {
       const ex = prev.find(i => i.product_id === p.product_id)
-      return ex ? prev.map(i => i.product_id === p.product_id ? { ...i, cant: i.cant + 1 } : i)
-                : [...prev, { ...p, cant: 1 }]
+      return ex ? prev.map(i => i.product_id === p.product_id ? { ...i, cant: i.cant + n } : i)
+                : [...prev, { ...p, cant: n }]
     })
-    toast(`${p.nombre} agregado`, <Check size={16} />)
+  }
+  const addProducto = (p) => { addCart(p); toast(`${p.nombre} agregado`, <Check size={16} />) }
+  const addPromo = (promo) => {
+    let agregados = 0
+    promo.items.forEach(it => {
+      const prod = productos.find(p => p.product_id === it.product_id)
+      if (prod) { addCart(prod, it.cant); agregados += it.cant }
+    })
+    if (agregados) { toast(`${promo.nombre} agregado al carrito`, <Tag size={16} />); setShowCart(true) }
+    else toast('Esa promo no está disponible en esta sede')
   }
   const setQty = (pid, d) => setCart(prev => prev.flatMap(i => {
     if (i.product_id !== pid) return [i]
@@ -99,6 +122,8 @@ export default function App() {
     } catch (e) { toast(e.message) } finally { setOrdenando(false) }
   }
 
+  const sedeActual = sedes.find(s => s.id === tenant)
+
   return (
     <div>
       <header className="header">
@@ -115,7 +140,6 @@ export default function App() {
         {sesion ? (
           <div className="user-chip">
             <User size={18} /> <b>{sesion.nombre.split(' ')[0]}</b>
-            <button className="btn btn-ghost" style={{ padding: '7px 14px' }} onClick={() => setShowPedidos(true)}><ClipboardList size={16} />Pedidos</button>
             <button className="icon-btn" onClick={logout} title="Salir"><LogOut size={18} /></button>
           </div>
         ) : (
@@ -123,44 +147,113 @@ export default function App() {
         )}
       </header>
 
-      <section className="hero">
-        <h1>Mejores ingredientes.<br />Mejor pizza.</h1>
-        <p>Pide online y sigue tu pedido en tiempo real, paso a paso.</p>
-        <div className="pizza">🍕</div>
-      </section>
-
-      <div className="tabs">
-        {CATEGORIAS.map(c => (
-          <button key={c.id} className={`tab ${categoria === c.id ? 'active' : ''}`} onClick={() => setCategoria(c.id)}>{c.label}</button>
+      <nav className="topnav">
+        {SECCIONES.map(s => (
+          <button key={s.id} className={`navlink ${seccion === s.id ? 'active' : ''}`} onClick={() => setSeccion(s.id)}>
+            <s.icon size={16} />{s.label}
+          </button>
         ))}
-      </div>
+      </nav>
 
-      {cargando ? (
-        <div className="grid">
-          {Array.from({ length: 8 }).map((_, i) => (
-            <div className="sk" key={i}><div className="sk-img shimmer" /><div className="sk-line shimmer" /><div className="sk-line short shimmer" /></div>
-          ))}
-        </div>
-      ) : (
-        <div className="grid">
-          {visibles.map(p => (
-            <div className="card" key={p.product_id}>
-              <div className="card-img">
-                <img src={p.image_url} alt={p.nombre}
-                     onError={e => { e.target.style.display = 'none'; e.target.parentNode.append(EMOJI[p.categoria] || '🍕') }} />
-              </div>
-              <div className="card-body">
-                <span className="card-cat">{p.categoria}</span>
-                <h3>{p.nombre}</h3>
-                <p>{p.descripcion}</p>
-                <div className="card-footer">
-                  <span className="precio">{soles(p.precio)}</span>
-                  <button className="btn btn-green" onClick={() => addCart(p)}><Plus size={16} />Agregar</button>
+      {seccion === 'menu' && (
+        <>
+          <section className="hero">
+            <h1>Mejores ingredientes.<br />Mejor pizza.</h1>
+            <p>Pide online y sigue tu pedido en tiempo real, paso a paso.</p>
+            <div className="pizza">🍕</div>
+          </section>
+          <div className="tabs">
+            {CATEGORIAS.map(c => (
+              <button key={c.id} className={`tab ${categoria === c.id ? 'active' : ''}`} onClick={() => setCategoria(c.id)}>{c.label}</button>
+            ))}
+          </div>
+          {cargando ? (
+            <div className="grid">
+              {Array.from({ length: 8 }).map((_, i) => (
+                <div className="sk" key={i}><div className="sk-img shimmer" /><div className="sk-line shimmer" /><div className="sk-line short shimmer" /></div>
+              ))}
+            </div>
+          ) : (
+            <div className="grid">
+              {visibles.map(p => (
+                <div className="card" key={p.product_id}>
+                  <div className="card-img">
+                    <img src={p.image_url} alt={p.nombre}
+                         onError={e => { e.target.style.display = 'none'; e.target.parentNode.append(EMOJI[p.categoria] || '🍕') }} />
+                  </div>
+                  <div className="card-body">
+                    <span className="card-cat">{p.categoria}</span>
+                    <h3>{p.nombre}</h3>
+                    <p>{p.descripcion}</p>
+                    <div className="card-footer">
+                      <span className="precio">{soles(p.precio)}</span>
+                      <button className="btn btn-green" onClick={() => addProducto(p)}><Plus size={16} />Agregar</button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+              {visibles.length === 0 && <div className="empty">No hay productos en esta categoría.</div>}
+            </div>
+          )}
+        </>
+      )}
+
+      {seccion === 'promos' && (
+        <div className="seccion">
+          <h2 className="sec-title"><Tag size={22} /> Promos exclusivas</h2>
+          <p className="sec-sub">Combos armados para ti. Se agregan al carrito y pagas el precio del catálogo.</p>
+          <div className="grid">
+            {PROMOS.map(pr => (
+              <div className="card promo" key={pr.id}>
+                <div className="card-img promo-img">{pr.emoji}<span className="promo-badge">OFERTA</span></div>
+                <div className="card-body">
+                  <h3>{pr.nombre}</h3>
+                  <p>{pr.desc}</p>
+                  <button className="btn btn-red" style={{ justifyContent: 'center', marginTop: 8 }} onClick={() => addPromo(pr)}>
+                    <Plus size={16} />Agregar combo
+                  </button>
                 </div>
               </div>
-            </div>
-          ))}
-          {visibles.length === 0 && <div className="empty">No hay productos en esta categoría.</div>}
+            ))}
+          </div>
+        </div>
+      )}
+
+      {seccion === 'locales' && (
+        <div className="seccion">
+          <h2 className="sec-title"><Store size={22} /> Nuestros locales</h2>
+          <p className="sec-sub">Elige tu local más cercano. Estás pidiendo en: <b>{sedeActual?.nombre || tenant}</b>.</p>
+          <div className="grid">
+            {sedes.map(s => (
+              <div className={`card local ${s.id === tenant ? 'sel' : ''}`} key={s.id}>
+                <div className="card-body">
+                  <h3><MapPin size={18} /> {s.nombre}</h3>
+                  <p>{s.direccion || 'Dirección no disponible'}</p>
+                  <button className={`btn ${s.id === tenant ? 'btn-ghost' : 'btn-green'}`} style={{ justifyContent: 'center', marginTop: 8 }}
+                          onClick={() => { setTenant(s.id); setSeccion('menu'); toast(`Pedirás en ${s.nombre}`) }}>
+                    {s.id === tenant ? 'Local seleccionado' : 'Pedir en este local'}
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {seccion === 'rastrea' && <Rastrea sesion={sesion} onLogin={() => setShowLogin(true)} onTrack={setTracking} />}
+
+      {seccion === 'nosotros' && (
+        <div className="seccion nosotros">
+          <h2 className="sec-title"><Info size={22} /> Nosotros</h2>
+          <p>En <b>Papa Johns</b> creemos que con mejores ingredientes se hace mejor pizza. Masa fresca, salsa de tomates
+             madurados y los mejores complementos, recién horneados para ti.</p>
+          <p>Hoy operamos en <b>{sedes.length} locales</b> y puedes pedir desde nuestra web o desde tus apps favoritas,
+             siguiendo tu pedido en tiempo real, desde que entra a cocina hasta que llega a tu puerta.</p>
+          <div className="vals">
+            <div className="val"><Pizza size={26} /><b>Calidad</b><span>Ingredientes frescos cada día</span></div>
+            <div className="val"><Truck size={26} /><b>Rapidez</b><span>Seguimiento en vivo de tu pedido</span></div>
+            <div className="val"><Store size={26} /><b>Cerca de ti</b><span>{sedes.length} locales y creciendo</span></div>
+          </div>
         </div>
       )}
 
@@ -193,7 +286,6 @@ export default function App() {
       )}
 
       {tracking && <Tracker sesion={sesion} orderId={tracking} onClose={() => setTracking(null)} />}
-      {showPedidos && sesion && <MisPedidos sesion={sesion} toast={toast} onClose={() => setShowPedidos(false)} onTrack={oid => { setShowPedidos(false); setTracking(oid) }} />}
       {showLogin && <LoginModal tenant={tenant} onClose={() => setShowLogin(false)} toast={toast}
         onLogin={s => { localStorage.setItem('sesion', JSON.stringify(s)); setSesion(s); setShowLogin(false); toast(`Hola, ${s.nombre.split(' ')[0]}`) }} />}
       {toastView}
@@ -207,18 +299,14 @@ function SedePicker({ sedes, value, onChange }) {
   return (
     <div className="picker">
       <button className="picker-btn" onClick={() => setOpen(o => !o)}>
-        <MapPin size={16} />
-        <span>{actual?.nombre || 'Elegir sede'}</span>
-        <ChevronDown size={15} />
+        <MapPin size={16} /><span>{actual?.nombre || 'Elegir sede'}</span><ChevronDown size={15} />
       </button>
       {open && <>
         <div className="picker-back" onClick={() => setOpen(false)} />
         <div className="picker-menu">
           {sedes.map(s => (
             <button key={s.id} className={`picker-item ${s.id === value ? 'active' : ''}`}
-                    onClick={() => { onChange(s.id); setOpen(false) }}>
-              <MapPin size={14} /> {s.nombre}
-            </button>
+                    onClick={() => { onChange(s.id); setOpen(false) }}><MapPin size={14} /> {s.nombre}</button>
           ))}
         </div>
       </>}
@@ -228,6 +316,37 @@ function SedePicker({ sedes, value, onChange }) {
 
 const FLOW = ['RECEIVED', 'COOKING', 'PACKING', 'DELIVERING', 'DELIVERED']
 const FLOW_LABEL = { RECEIVED: 'Recibido', COOKING: 'En cocina', PACKING: 'Empacando', DELIVERING: 'En camino', DELIVERED: 'Entregado', FAILED: 'Fallido' }
+
+function Rastrea({ sesion, onLogin, onTrack }) {
+  const [pedidos, setPedidos] = useState(null)
+  const cargar = () => {
+    if (!sesion) return
+    fetch(`${API_PEDIDOS}/pedidos`, { headers: { Authorization: `Bearer ${sesion.token}` } })
+      .then(r => r.json()).then(d => setPedidos((d.pedidos || []).reverse())).catch(() => setPedidos([]))
+  }
+  useEffect(() => { cargar() }, [])
+  if (!sesion) return (
+    <div className="seccion"><h2 className="sec-title"><Truck size={22} /> Rastrea tu pedido</h2>
+      <div className="empty">Inicia sesión para ver y seguir tus pedidos.
+        <div style={{ marginTop: 14 }}><button className="btn btn-red" onClick={onLogin}>Ingresar</button></div>
+      </div>
+    </div>
+  )
+  return (
+    <div className="seccion">
+      <h2 className="sec-title"><Truck size={22} /> Rastrea tu pedido</h2>
+      {pedidos === null && <div className="empty">Cargando…</div>}
+      {pedidos?.length === 0 && <div className="empty">Aún no tienes pedidos. ¡Haz tu primer pedido en el Menú!</div>}
+      {pedidos?.map(p => (
+        <div className="pedido-row" key={p.order_id}>
+          <div><b>#{p.order_id}</b> · {soles(p.total)}<div className="pedido-fecha">{new Date(p.created_at).toLocaleString('es-PE')}</div></div>
+          <span className={`chip ${p.status}`}>{FLOW_LABEL[p.status] || p.status}</span>
+          <button className="btn btn-green" style={{ padding: '7px 14px' }} onClick={() => onTrack(p.order_id)}>Seguir</button>
+        </div>
+      ))}
+    </div>
+  )
+}
 
 function Tracker({ sesion, orderId, onClose }) {
   const [status, setStatus] = useState('RECEIVED')
@@ -267,45 +386,7 @@ function Tracker({ sesion, orderId, onClose }) {
   )
 }
 
-function MisPedidos({ sesion, toast, onClose, onTrack }) {
-  const [pedidos, setPedidos] = useState(null)
-  const cargar = () => fetch(`${API_PEDIDOS}/pedidos`, { headers: { Authorization: `Bearer ${sesion.token}` } })
-    .then(r => r.json()).then(d => setPedidos((d.pedidos || []).reverse())).catch(() => setPedidos([]))
-  useEffect(() => { cargar() }, [])
-
-  const cancelar = async (oid) => {
-    if (!confirm(`¿Cancelar el pedido #${oid}?`)) return
-    const r = await fetch(`${API_PEDIDOS}/pedidos/${oid}/cancelar`, { method: 'POST', headers: { Authorization: `Bearer ${sesion.token}` } })
-    const d = await r.json()
-    if (!r.ok) return toast('⚠️ ' + (d.error || 'No se pudo cancelar'))
-    toast('Pedido cancelado'); cargar()
-  }
-  const cancelable = (s) => !['DELIVERED', 'FAILED'].includes(s)
-
-  return (
-    <div className="modal-center"><div className="overlay" onClick={onClose} />
-      <div className="modal">
-        <button className="icon-btn close" onClick={onClose}><X size={18} /></button>
-        <h2>Mis pedidos</h2>
-        {pedidos === null && <div className="empty">Cargando…</div>}
-        {pedidos?.length === 0 && <div className="empty">Aún no tienes pedidos.</div>}
-        {pedidos?.map(p => (
-          <div className="pedido-row" key={p.order_id}>
-            <div>
-              <b>#{p.order_id}</b> · {soles(p.total)}
-              <div className="pedido-fecha">{new Date(p.created_at).toLocaleString('es-PE')}</div>
-            </div>
-            <span className={`chip ${p.status}`}>{FLOW_LABEL[p.status] || p.status}</span>
-            <button className="btn btn-green" style={{ padding: '7px 12px' }} onClick={() => onTrack(p.order_id)}>Ver</button>
-            {cancelable(p.status) && <button className="btn btn-ghost" style={{ padding: '7px 12px' }} onClick={() => cancelar(p.order_id)}>Cancelar</button>}
-          </div>
-        ))}
-      </div>
-    </div>
-  )
-}
-
-function LoginModal({ tenant, onClose, onLogin, toast }) {
+function LoginModal({ tenant, onClose, onLogin }) {
   const [modo, setModo] = useState('login')
   const [form, setForm] = useState({ email: '', password: '', nombre: '' })
   const [error, setError] = useState('')
