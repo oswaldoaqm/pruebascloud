@@ -10,8 +10,12 @@ tabla = dynamodb.Table(os.environ["WORKFLOW_TABLE"])
 orders_tbl = dynamodb.Table(os.environ["ORDERS_TABLE"])
 sfn = boto3.client("stepfunctions")
 events = boto3.client("events")
+sqs = boto3.client("sqs")
+sns = boto3.client("sns")
 BUS = os.environ["EVENT_BUS"]
 SM_ARN = os.environ["STATE_MACHINE_ARN"]
+RAPPI_COLA_URL = os.environ.get("RAPPI_COLA_URL", "")
+SNS_TOPIC_ARN = os.environ.get("SNS_TOPIC_ARN", "")
 
 
 def _now() -> str:
@@ -127,8 +131,21 @@ def asignar_tarea(event, context):
     return {"ok": True, "paso": paso}
 
 
+def encolar_rappi(event, context):
+    """Consumidor EventBridge (origin=RAPPI): NO llama a OCI directo, sino que encola el
+    cambio en SQS. Así AWS queda desacoplado de la disponibilidad de la nube externa.
+    """
+    detail = event["detail"]
+    msg = {**detail, "dt": event.get("detail-type")}
+    sqs.send_message(QueueUrl=RAPPI_COLA_URL, MessageBody=json.dumps(msg))
+    print(f"Encolado a SQS: {detail['order_id']} ({event.get('detail-type')})")
+    return {"ok": True}
+
+
 def notify_rappi(event, context):
-    """Consumidor EventBridge (solo origin=RAPPI): actualiza el estado en 'Rappi' (API-2 en OCI)."""
+    """Consumidor de la cola SQS 'rappi-cola': actualiza el estado en 'Rappi' (API-2 en OCI).
+    Si OCI falla, la excepción propaga → SQS reintenta → tras 3 intentos cae a 'rappi-dlq'.
+    """
     import urllib.request
 
     url = os.environ.get("RAPPI_STATUS_URL", "")
@@ -136,29 +153,46 @@ def notify_rappi(event, context):
         print("RAPPI_STATUS_URL no configurada; se omite notificación")
         return {"ok": False, "skipped": True}
 
+    for record in event.get("Records", []):
+        d = json.loads(record["body"])
+        dt = d.get("dt")
+        if dt == "order.completed":
+            paso, status = "FIN", "DELIVERED"
+        elif dt == "order.failed":
+            paso, status = "ERROR", "FAILED"
+        else:
+            paso, status = d.get("paso"), d.get("status_pedido")
+
+        body = json.dumps({
+            "order_id": d["order_id"], "tenant_id": d["tenant_id"],
+            "paso": paso, "status_pedido": status,
+        }).encode()
+        req = urllib.request.Request(
+            f"{url}/status", data=body, method="POST",
+            headers={"Content-Type": "application/json", "x-api-key": os.environ["RAPPI_API_KEY"]},
+        )
+        # Si OCI está caído, urlopen lanza excepción → el mensaje vuelve a la cola (DLQ tras 3)
+        with urllib.request.urlopen(req, timeout=8) as r:
+            print(f"Rappi notificado: {d['order_id']} → {status} (HTTP {r.status})")
+    return {"ok": True}
+
+
+def notificar_cliente(event, context):
+    """Consumidor EventBridge (order.completed / order.failed): publica en SNS una
+    notificación saliente (pub/sub). El topic puede tener múltiples suscriptores (email, SMS…).
+    """
+    if not SNS_TOPIC_ARN:
+        return {"ok": False, "skipped": True}
     detail = event["detail"]
-    dt = event.get("detail-type")
-    if dt == "order.completed":
-        paso, status = "FIN", "DELIVERED"
-    elif dt == "order.failed":
-        paso, status = "ERROR", "FAILED"
+    oid = detail.get("order_id"); sede = detail.get("tenant_id")
+    if event.get("detail-type") == "order.completed":
+        subject = f"Pedido {oid} entregado"
+        msg = f"¡Buenas noticias! El pedido #{oid} de la sede {sede} fue ENTREGADO. ¡Gracias por tu compra! 🍕"
     else:
-        paso, status = detail["paso"], detail["status_pedido"]
-
-    body = json.dumps({
-        "order_id": detail["order_id"],
-        "tenant_id": detail["tenant_id"],
-        "paso": paso,
-        "status_pedido": status,
-    }).encode()
-
-    req = urllib.request.Request(
-        f"{url}/status", data=body, method="POST",
-        headers={"Content-Type": "application/json",
-                 "x-api-key": os.environ["RAPPI_API_KEY"]},
-    )
-    with urllib.request.urlopen(req, timeout=8) as r:
-        print(f"Rappi notificado: {detail['order_id']} → {status} (HTTP {r.status})")
+        subject = f"Pedido {oid} cancelado"
+        msg = f"El pedido #{oid} de la sede {sede} fue CANCELADO. Si no fuiste tú, contáctanos."
+    sns.publish(TopicArn=SNS_TOPIC_ARN, Subject=subject, Message=msg)
+    print(f"SNS publicado: {oid} ({subject})")
     return {"ok": True}
 
 

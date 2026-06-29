@@ -36,6 +36,8 @@ provider:
     IMAGES_BUCKET: pj-grupo2-imagenes-${aws:accountId}
     EVENT_BUS: pedidos-bus
     STATE_MACHINE_ARN: arn:aws:states:${aws:region}:${aws:accountId}:stateMachine:pedido-workflow-${sls:stage}
+    RAPPI_COLA_URL: https://sqs.${aws:region}.amazonaws.com/${aws:accountId}/rappi-cola-${sls:stage}
+    SNS_TOPIC_ARN: arn:aws:sns:${aws:region}:${aws:accountId}:pedidos-notificaciones-${sls:stage}
     JWT_SECRET: ${file(shared-config.yml):jwtSecret}
     RAPPI_API_KEY: ${file(shared-config.yml):rappiApiKey}
     RAPPI_STATUS_URL: ${file(shared-config.yml):rappiStatusUrl, ''}
@@ -145,6 +147,8 @@ functions:
           pattern:
             source: [ms.workflow]
             detail-type: [order.step.changed, order.completed, order.failed]
+          deadLetterQueueArn: { Fn::GetAtt: [EventosDLQ, Arn] }   # DLQ: no perder eventos
+          retryPolicy: { maximumRetryAttempts: 3 }
 
   # ── Dominio: workflow (Step Functions + tareas humanas) ──
   startWorkflow:
@@ -155,6 +159,8 @@ functions:
           pattern:
             source: [ms.pedidos]
             detail-type: [order.placed]
+          deadLetterQueueArn: { Fn::GetAtt: [EventosDLQ, Arn] }   # DLQ: no perder eventos
+          retryPolicy: { maximumRetryAttempts: 3 }
   asignarTarea:
     handler: workflow.asignar_tarea
   finalizar:
@@ -165,8 +171,9 @@ functions:
     handler: workflow.cancelar
     events:
       - httpApi: { path: '/pedidos/{order_id}/cancelar', method: post, authorizer: { name: jwtAuth } }
-  notifyRappi:
-    handler: workflow.notify_rappi
+  # EDA→SQS: encola las notificaciones a Rappi (amortigua la dependencia de OCI)
+  encolarRappi:
+    handler: workflow.encolar_rappi
     events:
       - eventBridge:
           eventBus: pedidos-bus
@@ -175,6 +182,25 @@ functions:
             detail-type: [order.step.changed, order.completed, order.failed]
             detail:
               origin: [RAPPI]
+          deadLetterQueueArn: { Fn::GetAtt: [EventosDLQ, Arn] }
+          retryPolicy: { maximumRetryAttempts: 3 }
+  # Consumidor de la cola SQS: llama a OCI; si falla, reintenta y cae a la DLQ
+  notifyRappi:
+    handler: workflow.notify_rappi
+    timeout: 15
+    events:
+      - sqs:
+          arn: { Fn::GetAtt: [RappiCola, Arn] }
+          batchSize: 1
+  # SNS: notificación saliente al cliente (pub/sub) al entregar o cancelar
+  notificarCliente:
+    handler: workflow.notificar_cliente
+    events:
+      - eventBridge:
+          eventBus: pedidos-bus
+          pattern:
+            source: [ms.workflow]
+            detail-type: [order.completed, order.failed]
   listarTareas:
     handler: tareas.listar
     events:
@@ -198,6 +224,46 @@ functions:
 
 resources:
   Resources:
+    # ── Mensajería asíncrona: SQS (amortiguador + DLQ) y SNS (notificaciones) ──
+    RappiDLQ:                       # cae aquí lo que falla tras 3 intentos contra OCI
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: rappi-dlq-${sls:stage}
+        MessageRetentionPeriod: 1209600   # 14 días
+    RappiCola:                      # cola amortiguadora delante de OCI/Rappi
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: rappi-cola-${sls:stage}
+        VisibilityTimeout: 90
+        RedrivePolicy:
+          deadLetterTargetArn: { Fn::GetAtt: [RappiDLQ, Arn] }
+          maxReceiveCount: 3
+    EventosDLQ:                     # DLQ para los consumidores internos de EventBridge
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: eventos-dlq-${sls:stage}
+        MessageRetentionPeriod: 1209600
+    EventosDLQPolicy:               # permite a EventBridge depositar en la DLQ
+      Type: AWS::SQS::QueuePolicy
+      Properties:
+        Queues: [ { Ref: EventosDLQ } ]
+        PolicyDocument:
+          Statement:
+            - Effect: Allow
+              Principal: { Service: events.amazonaws.com }
+              Action: sqs:SendMessage
+              Resource: { Fn::GetAtt: [EventosDLQ, Arn] }
+    PedidosTopic:                   # SNS: notificaciones salientes (pub/sub)
+      Type: AWS::SNS::Topic
+      Properties:
+        TopicName: pedidos-notificaciones-${sls:stage}
+    PedidosTopicSub:                # suscripción por email (confirmar una vez)
+      Type: AWS::SNS::Subscription
+      Properties:
+        TopicArn: { Ref: PedidosTopic }
+        Protocol: email
+        Endpoint: oswaldoaqm@gmail.com
+
     UsersTable:
       Type: AWS::DynamoDB::Table
       Properties:
