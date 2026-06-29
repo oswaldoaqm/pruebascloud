@@ -1,5 +1,5 @@
-# Copia este archivo como shared-config.yml (gitignored) en la raíz del repo
-# y cambia los valores. NUNCA subas shared-config.yml al repositorio.
+# Copia este archivo como backend/shared-config.yml (gitignored) y cambia los valores.
+# NUNCA subas shared-config.yml al repositorio.
 jwtSecret: CAMBIA-ESTE-SECRETO-LARGO-Y-ALEATORIO
 rappiApiKey: CAMBIA-ESTA-CLAVE-PARA-RAPPI
 # URL base de la API-2 (Rappi Status) en OCI, ej: http://164.152.x.x:8001

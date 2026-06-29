@@ -109,7 +109,7 @@ def crear(event, context):
 
 
 def crear_rappi(event, context):
-    """POST /pedidos/rappi — lo invoca la API de GCP con header x-api-key."""
+    """POST /pedidos/rappi — lo invoca la API de Rappi en OCI con header x-api-key."""
     headers = event.get("headers") or {}
     if headers.get("x-api-key") != RAPPI_API_KEY:
         return _response(401, {"error": "x-api-key inválida"})

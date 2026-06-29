@@ -64,6 +64,7 @@ sls invoke -f seedUsuarios     # 45 cuentas (11 por sede + superadmin)
 ## Antes de una exposición/demo
 - Renovar credenciales y correr `bash scripts/run-all.sh` (debe dar verde).
 - Confirmar que la VM de OCI y sus 2 contenedores están arriba.
+- Demo multi-nube: web de Rappi en `http://<IP_OCI>:8000/ui` (sin login) o `bash scripts/demo-multinube.sh`.
 - **Hard refresh** en ambas webs.
 - Si presentas desde la red de UTEC, los puertos 8000/8001 de OCI pueden estar bloqueados para el
   navegador: muestra la evidencia de "Rappi" con `curl` desde Cloud Shell o usa hotspot.
