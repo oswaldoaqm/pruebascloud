@@ -13,12 +13,15 @@ import sqlite3
 from datetime import datetime, timezone
 
 from fastapi import FastAPI, Header, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 API_KEY = os.environ["API_KEY"]
 DB_PATH = os.environ.get("DB_PATH", "rappi.db")
 
 app = FastAPI(title="Rappi Status API")
+# CORS abierto: la web de demo (servida en :8000) consulta el estado aquí (:8001).
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
 
 def _db():

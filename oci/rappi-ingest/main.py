@@ -6,6 +6,8 @@ import os
 
 import requests
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 AWS_PEDIDOS_URL = os.environ["AWS_PEDIDOS_URL"]  # https://xxxx.execute-api.us-east-1.amazonaws.com
@@ -13,6 +15,8 @@ API_KEY = os.environ["API_KEY"]                  # misma rappiApiKey que conoce 
 STATUS_URL = os.environ["STATUS_URL"]            # http://<IP_PRIVADA_VM>:8001
 
 app = FastAPI(title="Rappi Ingest API")
+# CORS abierto: la web de demo (servida aquí) consulta la API de estado en otro puerto.
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
 
 class Pedido(BaseModel):
@@ -24,6 +28,12 @@ class Pedido(BaseModel):
 @app.get("/")
 def health():
     return {"service": "rappi-ingest", "ok": True}
+
+
+@app.get("/ui")
+def ui():
+    """Web de demo 'Rappi' (sin login) alojada en OCI."""
+    return FileResponse("static/index.html")
 
 
 @app.post("/orders", status_code=201)

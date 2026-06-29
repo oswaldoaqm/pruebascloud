@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Rappi · Papa Johns</title>
+<style>
+  :root { --naranja:#ff5a1f; --naranja2:#ff7a3c; --verde:#00713d; --bg:#fff6f1; --txt:#241a14; --soft:#7a6a5e; --bord:#f0ddd0; }
+  * { margin:0; box-sizing:border-box; font-family:'Segoe UI',system-ui,Arial,sans-serif; }
+  body { background:var(--bg); color:var(--txt); }
+  header { background:linear-gradient(100deg,var(--naranja),var(--naranja2)); color:#fff; padding:16px 22px; display:flex; align-items:center; gap:12px; position:sticky; top:0; z-index:10; }
+  header .logo { font-size:1.5rem; font-weight:800; }
+  header select { margin-left:auto; padding:8px 12px; border-radius:10px; border:none; font-weight:700; }
+  .wrap { max-width:1000px; margin:0 auto; padding:22px; }
+  .hero { background:#fff; border:1px solid var(--bord); border-radius:16px; padding:18px 22px; margin-bottom:18px; }
+  .hero h1 { font-size:1.3rem; } .hero p { color:var(--soft); margin-top:4px; font-size:.92rem; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:16px; }
+  .card { background:#fff; border:1px solid var(--bord); border-radius:16px; overflow:hidden; display:flex; flex-direction:column; box-shadow:0 4px 14px rgba(120,60,20,.06); }
+  .card .ph { height:120px; background:linear-gradient(135deg,#ffe9dd,#ffd9c6); display:grid; place-items:center; font-size:3rem; }
+  .card .b { padding:14px; flex:1; display:flex; flex-direction:column; gap:6px; }
+  .card h3 { font-size:1.05rem; } .card .precio { font-weight:800; color:var(--naranja); font-size:1.2rem; }
+  .btn { border:none; border-radius:999px; padding:10px 16px; font-weight:800; cursor:pointer; background:var(--naranja); color:#fff; transition:filter .15s,transform .1s; }
+  .btn:hover { filter:brightness(1.08); transform:translateY(-1px); } .btn:disabled { opacity:.5; cursor:default; }
+  .panel { background:#fff; border:1px solid var(--bord); border-radius:16px; padding:18px 22px; margin-bottom:18px; }
+  .panel h2 { font-size:1.1rem; margin-bottom:12px; }
+  .track { display:flex; gap:6px; flex-wrap:wrap; }
+  .step { flex:1; min-width:90px; text-align:center; padding:10px 6px; border-radius:10px; background:#f4ece6; color:var(--soft); font-weight:700; font-size:.82rem; position:relative; }
+  .step.done { background:var(--verde); color:#fff; } .step.cur { background:var(--naranja); color:#fff; animation:pulse 1.2s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1;} 50%{opacity:.6;} }
+  .ord { display:flex; align-items:center; gap:10px; padding:10px 0; border-bottom:1px solid var(--bord); font-size:.9rem; }
+  .ord:last-child { border:none; } .ord .id { font-weight:800; } .ord .sp { flex:1; }
+  .chip { padding:3px 10px; border-radius:999px; color:#fff; font-size:.74rem; font-weight:800; }
+  .RECEIVED{background:#8a8a8a;} .COOKING{background:#e8730a;} .PACKING{background:#8a3ffc;}
+  .DELIVERING{background:#1f6feb;} .DELIVERED{background:var(--verde);} .FAILED{background:#e01a22;}
+  .muted { color:var(--soft); font-size:.85rem; }
+</style>
+</head>
+<body>
+<header>
+  <span class="logo">🛵 Rappi</span><span>· entregas Papa Johns</span>
+  <select id="sede">
+    <option value="pj-miraflores">Papa Johns - Miraflores</option>
+    <option value="pj-surco">Papa Johns - Surco</option>
+    <option value="pj-san-isidro">Papa Johns - San Isidro</option>
+    <option value="pj-la-molina">Papa Johns - La Molina</option>
+  </select>
+</header>
+
+<div class="wrap">
+  <div class="hero">
+    <h1>Pide desde Rappi 🍕</h1>
+    <p>Esta app vive en <b>OCI</b> (otra nube). Tu pedido viaja a <b>AWS</b>, lo prepara el restaurante, y el estado vuelve a Rappi en tiempo real.</p>
+  </div>
+
+  <div class="panel" id="seguimiento" style="display:none">
+    <h2>Tu pedido <span id="oid" class="chip DELIVERED"></span></h2>
+    <div class="track" id="track"></div>
+    <p class="muted" id="seg-msg" style="margin-top:10px"></p>
+  </div>
+
+  <div class="grid" id="menu"></div>
+
+  <div class="panel" style="margin-top:18px">
+    <h2>Pedidos recientes en Rappi</h2>
+    <div id="recientes"><p class="muted">—</p></div>
+  </div>
+</div>
+
+<script>
+  // La página se sirve desde el ingest (:8000); la API de estado está en :8001 del mismo host.
+  const INGEST = location.origin;
+  const STATUS = location.protocol + '//' + location.hostname + ':8001';
+  const PASOS = ['RECEIVED','COOKING','PACKING','DELIVERING','DELIVERED'];
+  const LBL = {RECEIVED:'Recibido',COOKING:'En cocina',PACKING:'Empacando',DELIVERING:'En camino',DELIVERED:'Entregado',FAILED:'Cancelado'};
+  const MENU = [
+    {id:'pz-superpapa', n:'Super Papa', p:49.90, e:'🍕'},
+    {id:'pz-pepperoni', n:'Pepperoni', p:39.90, e:'🍕'},
+    {id:'pz-hawaiana', n:'Hawaiana', p:39.90, e:'🍍'},
+    {id:'pz-cheese', n:'Cheese', p:33.90, e:'🧀'},
+    {id:'cp-poppers', n:'Chicken Poppers', p:21.90, e:'🍗'},
+    {id:'bd-pepsi15', n:'Pepsi 1.5L', p:9.90, e:'🥤'},
+  ];
+  let actual = null;
+
+  document.getElementById('menu').innerHTML = MENU.map(m => `
+    <div class="card">
+      <div class="ph">${m.e}</div>
+      <div class="b">
+        <h3>${m.n}</h3>
+        <span class="precio">S/ ${m.p.toFixed(2)}</span>
+        <button class="btn" onclick="pedir('${m.id}','${m.n}')">Pedir</button>
+      </div>
+    </div>`).join('');
+
+  async function pedir(id, nombre) {
+    const sede = document.getElementById('sede').value;
+    try {
+      const r = await fetch(INGEST + '/orders', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ tenant_id: sede, items:[{product_id:id, cant:1}], cliente:{nombre:'Cliente Rappi'} })
+      });
+      const d = await r.json();
+      if (!d.order_id) { alert('No se pudo crear el pedido: ' + (d.error||JSON.stringify(d))); return; }
+      actual = d.order_id;
+      document.getElementById('seguimiento').style.display = 'block';
+      document.getElementById('oid').textContent = '#' + d.order_id;
+      seguir();
+    } catch(e) { alert('Error: ' + e.message); }
+  }
+
+  function pintarTrack(status) {
+    const idx = PASOS.indexOf(status);
+    const ent = status === 'DELIVERED';
+    document.getElementById('track').innerHTML = PASOS.map((s,i) => {
+      const done = i < idx || ent, cur = i === idx && !ent;
+      return `<div class="step ${done?'done':cur?'cur':''}">${LBL[s]}</div>`;
+    }).join('');
+    const msg = status === 'DELIVERED' ? '🎉 ¡Entregado! Buen provecho.'
+              : status === 'FAILED' ? '⚠️ El pedido fue cancelado.'
+              : 'El restaurante (AWS) está atendiendo tu pedido… se actualiza solo.';
+    document.getElementById('seg-msg').textContent = msg;
+  }
+
+  async function seguir() {
+    if (!actual) return;
+    try {
+      const d = await (await fetch(STATUS + '/orders/' + actual)).json();
+      if (d.status) pintarTrack(d.status);
+    } catch(e) {}
+  }
+
+  async function recientes() {
+    try {
+      const d = await (await fetch(STATUS + '/orders')).json();
+      const list = (d.orders||[]).slice(0,8);
+      document.getElementById('recientes').innerHTML = list.length ? list.map(o => `
+        <div class="ord"><span class="id">#${o.order_id}</span>
+          <span class="muted">${o.cliente?.nombre||''} · ${o.tenant_id||''}</span>
+          <span class="sp"></span>
+          <span class="chip ${o.status}">${LBL[o.status]||o.status}</span></div>`).join('')
+        : '<p class="muted">Aún no hay pedidos.</p>';
+    } catch(e) {}
+  }
+
+  setInterval(() => { seguir(); recientes(); }, 3000);
+  recientes();
+</script>
+</body>
+</html>
