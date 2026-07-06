@@ -1,4 +1,3 @@
-# Va en la RAÍZ del repo. Configuración monorepo para Amplify Hosting.
 version: 1
 applications:
   - appRoot: frontend/web-trabajadores
